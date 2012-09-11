@@ -13,10 +13,16 @@
 ##############################################################################
 name, version = 'zc.awsrecipes', '0'
 
-install_requires = ['setuptools', 'boto']
+install_requires = ['setuptools', 'boto', 'zc.zk']
 extras_require = dict(test=['zope.testing', 'mock'])
 
 entry_points = """
+[zc.buildout]
+ebs = zc.awsrecipes:EBS
+ec2 = zc.awsrecipes:EC2
+
+[zc.buildout.uninstall]
+ec2 = zc.awsrecipes:uninstall_ec2_instance
 """
 
 from setuptools import setup

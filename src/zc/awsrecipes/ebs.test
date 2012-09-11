@@ -15,7 +15,7 @@ size
 name
    A logical name for the volumes.
 
-Note that a volume is identified by name and an index.
+Note that a volume is identified by name.
 
     >>> import zc.awsrecipes
     >>> zc.awsrecipes.EBS({}, 'myvolume', dict(
@@ -26,14 +26,27 @@ Note that a volume is identified by name and an index.
     ... )).install()
     ()
 
-    >>> import boto.ec2.connection
-    >>> conn = boto.ec2.connection.EC2Connection(region='test_region')
-
-Now, if we look throug our ebs volumes, we should see 2 with a name of
+Now, if we look throug our ebs volumes, we should see 1 with a name of
 data:
 
+    >>> import boto.ec2.connection
+    >>> conn = boto.ec2.connection.EC2Connection(region='test_region')
     >>> for v in conn.get_all_volumes():
     ...     if v.tags['Name'] == 'data':
     ...         print v.size
     50
 
+If we update, we won't get more volumes:
+
+    >>> zc.awsrecipes.EBS({}, 'myvolume', dict(
+    ...     region = 'test_region',
+    ...     zone = 'us-east-1b',
+    ...     size = '50',
+    ...     name = 'data',
+    ... )).update()
+    ()
+
+    >>> for v in conn.get_all_volumes():
+    ...     if v.tags['Name'] == 'data':
+    ...         print v.size
+    50
