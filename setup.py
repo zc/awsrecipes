@@ -13,7 +13,7 @@
 ##############################################################################
 name, version = 'zc.awsrecipes', '0'
 
-install_requires = ['setuptools', 'boto', 'zc.zk']
+install_requires = ['setuptools', 'boto', 'zc.zk [static]', 'zc.metarecipe']
 extras_require = dict(test=['zope.testing', 'mock'])
 
 entry_points = """
@@ -33,8 +33,8 @@ setup(
     license = 'ZPL 2.1',
 
     name = name, version = version,
-    long_description=open('README.txt').read(),
-    description = open('README.txt').read().strip().split('\n')[0],
+    long_description=open('README.rst').read(),
+    description = open('README.rst').read().strip().split('\n')[0],
     packages = [name.split('.')[0], name],
     namespace_packages = [name.split('.')[0]],
     package_dir = {'': 'src'},

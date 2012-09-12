@@ -104,7 +104,7 @@ def setup(test):
 def test_suite():
     return unittest.TestSuite((
         doctest.DocFileSuite(
-            'ebs.test', 'ec2.test',
+            'ebs.test',
             setUp=setup, tearDown=setupstack.tearDown),
         ))
 
