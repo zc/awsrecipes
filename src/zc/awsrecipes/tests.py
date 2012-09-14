@@ -164,6 +164,14 @@ def setup(test):
     def get_region(region):
         return Ob(name=region)
 
+    setupstack.context_manager(
+        test, mock.patch(
+            'pwd.getpwuid',
+            side_effect=lambda uid: Ob(**dict(
+                pw_name='testy',
+                pw_gecos='Testy Tester',
+                ))))
+
     setupstack.context_manager(test, mock.patch('time.sleep'))
 
     zc.zk.testing.setUp(test, '')

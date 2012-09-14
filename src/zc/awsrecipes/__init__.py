@@ -1,10 +1,13 @@
 import boto.ec2
 import boto.vpc
-import zc.metarecipe
-import zc.zk
+import optparse
+import pwd
+import os
+import sys
 import tempfile
 import time
-import optparse, sys
+import zc.metarecipe
+import zc.zk
 
 def _zkargs(args):
     [zoo, path] = args
@@ -42,6 +45,12 @@ def default_security_group_for_subnet(region, subnet_id):
                ]
     return group.id
 
+def who():
+    return "%s (%s)" % (
+        pwd.getpwuid(os.geteuid()).pw_name,
+        pwd.getpwuid(os.geteuid()).pw_gecos,
+        )
+
 def lebs_main(args=None):
     parser = optparse.OptionParser("""Usage: %prog ZOO PATH""")
     options, args = parser.parse_args(args)
@@ -77,6 +86,7 @@ def lebs(zk, path):
                         logical=path,
                         replica=str(replica),
                         index=str(index),
+                        creator=who(),
                         ))
                 print 'created', name
 
@@ -129,7 +139,10 @@ def storage_server(zk, path):
         )
     instance = reservation.instances[0]
 
-    conn.create_tags([instance.id], dict(Name=hostname))
+    conn.create_tags([instance.id], dict(
+        Name=hostname,
+        creator=who(),
+        ))
 
     while 1:
         time.sleep(9)
