@@ -300,8 +300,9 @@ server won't be created:
     >>> zk.import_tree(tree)
     >>> server(['zookeeper.example.com:2181',
     ...        '/example/example.com/storage2.example.com'])
-
-
+    Traceback (most recent call last):
+    ...
+    NoNodeException: /example/example.com/database
 
     >>> for instance in conn.instances:
     ...     print instance

@@ -120,6 +120,14 @@ def storage_server(zk, path):
         filters=tag_filter(Name=hostname))
     assert_(not existing, "%s exists" % hostname)
 
+    vdata = []
+    for name in properties:
+        if not name.startswith('sd'):
+            continue
+        vpath, replica = properties[name].split()
+        vproperties = zk.properties(vpath)
+        vdata.append((vpath, replica, vproperties))
+
     subnet_id = hosts['subnet']
 
     role = properties.get(
@@ -151,11 +159,7 @@ def storage_server(zk, path):
             break
         print state
 
-    for name in properties:
-        if not name.startswith('sd'):
-            continue
-        vpath, replica = properties[name].split()
-        vproperties = zk.properties(vpath)
+    for vpath, replica, vproperties in vdata:
         for vol in conn.get_all_volumes(
             filters=tag_filter(
                 logical=vpath,
