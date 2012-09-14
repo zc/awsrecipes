@@ -1,0 +1,16 @@
+/zc
+  /jimstorage.aws.zope.net : storage-server
+    instance-type = 'm1.small'
+    sdb = '/zc/zope.com/databases 1'
+
+  /zope.com
+     /volume : lebs
+         size = 1
+         n = 4
+         replicas = 1, 2
+
+/hosts
+  region = 'us-east-1'
+  ami = 'ami-4bf95022'
+  subnet = 'subnet-d7936dbc'
+  default-zone = 'us-east-1b'
