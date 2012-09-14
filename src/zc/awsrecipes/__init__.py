@@ -114,7 +114,7 @@ def storage_server_main(args=None):
 
 def storage_server(zk, path):
     properties, hosts, conn = _zk(zk, path)
-    hostname = path.rsplit('/')[1]
+    hostname = path.rsplit('/', 1)[1]
 
     existing = conn.get_all_instances(
         filters=tag_filter(Name=hostname))

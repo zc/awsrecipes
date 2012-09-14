@@ -173,9 +173,9 @@ At this point, we have a storage server:
      'name': 'default',
      'tags': {},
      'vpc_id': 'vpc1'})],
-               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname example\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
+               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.example.com\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
      'id': 'inst0',
-     'tags': {'Name': 'example',
+     'tags': {'Name': 'storage.example.com',
               'creator': 'testy (Testy Tester)'}})
 
 And the relevent volumes are attached:
