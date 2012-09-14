@@ -166,6 +166,3 @@ def storage_server(zk, path):
                 replica=replica,
                 )):
             vol.attach(instance.id, name+vol.tags['index'])
-
-if __name__ == '__main__':
-    main()
