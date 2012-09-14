@@ -274,3 +274,42 @@ And the relevent volumes are attached:
               'logical': '/example/example.com/volume',
               'replica': '2'},
      'zone': u'us-up-1z'})
+
+
+If you get a volume path wrong in a storage-server definition, the
+server won't be created:
+
+::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+
+       /storage.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/volume 2'
+       /storage2.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/database 2'
+
+.. -> tree
+
+    >>> zk.import_tree(tree)
+    >>> server(['zookeeper.example.com:2181',
+    ...        '/example/example.com/storage2.example.com'])
+
+
+
+    >>> for instance in conn.instances:
+    ...     print instance
+    Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
+     'name': 'default',
+     'tags': {},
+     'vpc_id': 'vpc1'})],
+               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.example.com\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
+     'id': 'inst0',
+     'tags': {'Name': 'storage.example.com',
+              'creator': 'testy (Testy Tester)'}})
