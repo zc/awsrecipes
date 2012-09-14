@@ -1,52 +1,261 @@
-Recipe to create ebs volumes
-============================
+Utility scripts
+===============
 
-The recipe takes a the following options:
+lebs
+----
 
-region
-   AWS Region
+Deploy or update a logical volume defined at a given ZooKeeper path.
 
-zone
-   The name of an aws zone.
+Usage: ``lebs ZOO PATH``
 
-size
-   Size in GB
+where:
 
-name
-   A logical name for the volumes.
+ZOO
+  A ZooKeeper connection string.
 
-Note that a volume is identified by name.
+PATH
+  A path in ZooKeeper where a logical ebs volume is defined.  It must
+  have a type property with the value: ``lebs``
 
-    >>> import zc.awsrecipes
-    >>> zc.awsrecipes.EBS({}, 'myvolume', dict(
-    ...     region = 'test_region',
-    ...     zone = 'us-east-1b',
-    ...     size = '50',
-    ...     name = 'data',
-    ... )).install()
-    ()
+Notes:
 
-Now, if we look throug our ebs volumes, we should see 1 with a name of
-data:
+- The ZooKeeper tree must have a ``/hosts`` node containing a region
+  property.
 
-    >>> import boto.ec2.connection
-    >>> conn = boto.ec2.connection.EC2Connection(region='test_region')
-    >>> for v in conn.get_all_volumes():
-    ...     if v.tags['Name'] == 'data':
-    ...         print v.size
-    50
+Let's set up a sample tree::
 
-If we update, we won't get more volumes:
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 2
+           replicas = 1, 2
 
-    >>> zc.awsrecipes.EBS({}, 'myvolume', dict(
-    ...     region = 'test_region',
-    ...     zone = 'us-east-1b',
-    ...     size = '50',
-    ...     name = 'data',
-    ... )).update()
-    ()
+  /hosts
+    region = 'test_region'
+    subnet = 'subnet-42'
+    default-zone = 'us-up-1z'
+    ami = 'ami-42'
 
-    >>> for v in conn.get_all_volumes():
-    ...     if v.tags['Name'] == 'data':
-    ...         print v.size
-    50
+.. -> tree
+
+    >>> import zc.zk
+    >>> zk = zc.zk.ZK('zookeeper.example.com:2181')
+    >>> zk.import_tree(tree)
+
+    >>> import pkg_resources
+    >>> dist = pkg_resources.working_set.find(
+    ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
+    >>> lebs = pkg_resources.load_entry_point(dist, 'console_scripts', 'lebs')
+    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
+    created /example/example.com/volume 1-1
+    created /example/example.com/volume 1-2
+    created /example/example.com/volume 2-1
+    created /example/example.com/volume 2-2
+
+    >>> import boto.ec2
+    >>> conn = boto.ec2.connect_to_region('test_region')
+    >>> for volume in conn.volumes:
+    ...     print volume
+    Volume({'id': 'vol0',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 1-1',
+              'index': '1',
+              'logical': '/example/example.com/volume',
+              'replica': '1'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol1',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 1-2',
+              'index': '2',
+              'logical': '/example/example.com/volume',
+              'replica': '1'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol2',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-1',
+              'index': '1',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol3',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-2',
+              'index': '2',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})
+
+If we change the size after there are existing volumes, we'll get an error::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 2
+           n = 2
+           replicas = 1, 2
+
+.. -> tree
+
+    >>> zk.import_tree(tree)
+    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
+    Traceback (most recent call last):
+    ...
+    AssertionError: Existing volumne, /example/example.com/volume 1-1, has size 1
+
+If we increase the number of volumes, or add a replica, additional
+volumes are added as necessary::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+
+.. -> tree
+
+    >>> zk.import_tree(tree)
+    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
+    ... # doctest: +NORMALIZE_WHITESPACE
+    created /example/example.com/volume 3-1
+    created /example/example.com/volume 3-2
+    created /example/example.com/volume 3-3
+    created /example/example.com/volume 3-4
+    exists /example/example.com/volume 2-1
+    exists /example/example.com/volume 2-2
+    created /example/example.com/volume 2-3
+    created /example/example.com/volume 2-4
+    Unused: ['/example/example.com/volume 1-1',
+             '/example/example.com/volume 1-2']
+
+Note that we stopped using replica 1.  The corresponding unused
+volumes were noted, but not removed.  We're too cowardly to remove
+disk volumes.
+
+Once the volumes have been created, we're ready to set up storage
+servers.  We'll start with one::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+
+       /storage.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/volume 2'
+
+.. -> tree
+
+    >>> zk.import_tree(tree)
+
+To add a server, we'll use the storage-server command:
+
+    >>> server = pkg_resources.load_entry_point(
+    ...     dist, 'console_scripts', 'storage-server')
+
+
+    >>> server(['zookeeper.example.com:2181',
+    ...        '/example/example.com/storage.example.com'])
+
+
+At this point, we have a storage server:
+
+    >>> for instance in conn.instances:
+    ...     print instance
+    Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
+     'name': 'default',
+     'tags': {},
+     'vpc_id': 'vpc1'})],
+               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname example\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
+     'id': 'inst0',
+     'tags': {'Name': 'example'}})
+
+And the relevent volumes are attached:
+
+    >>> for volume in conn.volumes:
+    ...     print volume
+    Volume({'id': 'vol0',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 1-1',
+              'index': '1',
+              'logical': '/example/example.com/volume',
+              'replica': '1'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol1',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 1-2',
+              'index': '2',
+              'logical': '/example/example.com/volume',
+              'replica': '1'},
+     'zone': u'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb1',
+     'instance_id': 'inst0',
+     'status': 'attached'}),
+     'id': 'vol2',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-1',
+              'index': '1',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb2',
+     'instance_id': 'inst0',
+     'status': 'attached'}),
+     'id': 'vol3',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-2',
+              'index': '2',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol4',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 3-1',
+              'index': '1',
+              'logical': '/example/example.com/volume',
+              'replica': '3'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol5',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 3-2',
+              'index': '2',
+              'logical': '/example/example.com/volume',
+              'replica': '3'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol6',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 3-3',
+              'index': '3',
+              'logical': '/example/example.com/volume',
+              'replica': '3'},
+     'zone': u'us-up-1z'})
+    Volume({'id': 'vol7',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 3-4',
+              'index': '4',
+              'logical': '/example/example.com/volume',
+              'replica': '3'},
+     'zone': u'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb3',
+     'instance_id': 'inst0',
+     'status': 'attached'}),
+     'id': 'vol8',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-3',
+              'index': '3',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb4',
+     'instance_id': 'inst0',
+     'status': 'attached'}),
+     'id': 'vol9',
+     'size': 1,
+     'tags': {'Name': '/example/example.com/volume 2-4',
+              'index': '4',
+              'logical': '/example/example.com/volume',
+              'replica': '2'},
+     'zone': u'us-up-1z'})

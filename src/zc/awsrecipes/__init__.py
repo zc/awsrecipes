@@ -1,114 +1,154 @@
-import boto.ec2.connection
+import boto.ec2
+import boto.vpc
 import zc.metarecipe
 import zc.zk
 import tempfile
+import time
+import optparse, sys
+
+def _zkargs(args):
+    [zoo, path] = args
+
+    return zc.zk.ZK(zoo), path
 
 
-ZK_LOCATION = 'zookeeper:2181'
+def _zk(zk, path):
 
-class EBS:
-    def __init__(self, buildout, name, options):
-        self.size = options['size']
-        self.zone = options['zone']
-        self.volname = options['name']
+    hosts = dict(zk.properties('/hosts'))
+    region = hosts['region']
+    properties = dict(zk.properties(path))
 
-        self.conn = boto.ec2.connection.EC2Connection(
-            region=options['region']
+    if 'zone' not in properties:
+        assert 'default-zone' in hosts, "no zone specified"
+        properties['zone'] = hosts['default-zone']
+
+    return properties, hosts, boto.ec2.connect_to_region(region)
+
+def assert_(cond, *message):
+    if not cond:
+        raise AssertionError(*message)
+
+def path_to_name(path):
+    return path[1:].replace('/', ',')
+
+def tag_filter(**kw):
+    return dict(('tag:'+name, kw[name]) for name in kw)
+
+def default_security_group_for_subnet(region, subnet_id):
+    vpc_conn = boto.vpc.VPCConnection(region=boto.ec2.get_region(region))
+    [sub] = vpc_conn.get_all_subnets([subnet_id])
+    [group] = [g for g in vpc_conn.get_all_security_groups()
+               if g.name == 'default' and g.vpc_id == sub.vpc_id
+               ]
+    return group.id
+
+def lebs_main(args=None):
+    parser = optparse.OptionParser("""Usage: %prog ZOO PATH""")
+    options, args = parser.parse_args(args)
+    if args is None:
+        args = sys.argv[1:]
+
+    lebs(*_zkargs(args))
+
+def lebs(zk, path):
+
+    properties, hosts, conn = _zk(zk, path)
+
+    size = properties['size']
+    existing = set()
+    for vol in conn.get_all_volumes(filters=tag_filter(logical=path)):
+        assert_(vol.size == size, (
+            "Existing volumne, %s, has size %s"
+            % (vol.tags['Name'], vol.size)))
+        existing.add(vol.tags['Name'])
+
+    needed = set()
+    for replica in properties['replicas']:
+        for index in range(1, properties['n'] + 1):
+            name = "%s %s-%s" % (path, replica, index)
+            needed.add(name)
+            if name in existing:
+                print 'exists', name
+            else:
+                vol = conn.create_volume(size, properties['zone'])
+                conn.create_tags(
+                    [vol.id], dict(
+                        Name=name,
+                        logical=path,
+                        replica=str(replica),
+                        index=str(index),
+                        ))
+                print 'created', name
+
+    extra = existing - needed
+    if extra:
+        print 'Unused:', sorted(extra)
+
+storage_user_data_template = """#!/bin/sh
+echo %(role)r > /etc/zim/role
+hostname %(hostname)s
+/usr/bin/yum -y install awsrecipes
+/opt/awsrecipes/bin/setup_volumes %(path)s
+"""
+
+
+def storage_server_main(args=None):
+    if args is None:
+        args = sys.argv[1:]
+    parser = optparse.OptionParser("""Usage: %prog ZOO PATH""")
+
+    options, args = parser.parse_args(args)
+
+    storage_server(*_zkargs(args))
+
+
+def storage_server(zk, path):
+    properties, hosts, conn = _zk(zk, path)
+    hostname = path.rsplit('/')[1]
+
+    existing = conn.get_all_instances(
+        filters=tag_filter(Name=hostname))
+    assert_(not existing, "%s exists" % hostname)
+
+    subnet_id = hosts['subnet']
+
+    role = properties.get(
+        'role', path[1:].rsplit('/')[0].replace('/', ',')+',storage')
+
+    reservation = conn.run_instances(
+        image_id = hosts['ami'],
+        security_group_ids=[default_security_group_for_subnet(
+            hosts['region'], subnet_id)],
+        user_data=storage_user_data_template % dict(
+            role=role,
+            hostname=hostname,
+            path=path,
+            ),
+        instance_type=properties['instance-type'],
+        subnet_id = subnet_id,
         )
+    instance = reservation.instances[0]
 
-    def install(self):
-        '''Create a EBS volumen and set tags
-        '''
-        vol = self.conn.create_volume(int(self.size), self.zone)
-        self.conn.create_tags([vol.id], dict(Name=self.volname))
-        return ()
+    conn.create_tags([instance.id], dict(Name=hostname))
 
-    def update(self):
-        '''Update does not create a new volume if one with the
-        name tag exists
-        '''
-        if self.volname in [v.tags['Name']
-                            for v in self.conn.get_all_volumes()]:
-            return ()
-        else:
-            return self.install()
+    while 1:
+        time.sleep(9)
+        state = instance.update()
+        if state == 'running':
+            break
+        print state
 
-user_data_start = '''#!/bin/sh
-hostname %s.aws.zope.net
-bcfg2
-'''
+    for name in properties:
+        if not name.startswith('sd'):
+            continue
+        vpath, replica = properties[name].split()
+        vproperties = zk.properties(vpath)
+        for vol in conn.get_all_volumes(
+            filters=tag_filter(
+                logical=vpath,
+                replica=replica,
+                )):
+            vol.attach(instance.id, name+vol.tags['index'])
 
-def uninstall_ebs_volume(name, options):
-    pass
-
-
-class EC2:
-
-    def __init__(self, buildout, name, options):
-        self.options = options
-
-    def install(self):
-        options = self.options
-        conn = boto.ec2.connection.EC2Connection(region=options['region'])
-
-        [ami] = conn.get_all_images(
-            filters={'tag-key': 'Name', 'tag-value': 'default'})
-
-        user_data = user_data_start % options['name']
-
-        role = options.get('role')
-        if role:
-            user_data += '/opt/awshelpers/bin/set_role %s\n' % role
-
-        res = conn.run_instances(
-            ami.id,
-            security_groups = options.get(
-                'security-groups', '').split() + ['default'],
-            placement = options['zone'],
-            user_data = user_data,
-            instance_type=options['type'],
-            )
-        conn.create_tags([instance.id for instance in res[0].instances],
-                         dict(Name=self.options['name']))
-
-        return ()
-
-    update = install
-
-def uninstall_ec2_instance(name, options):
-    '''Uninstall an ec2 instance by its name
-    '''
-
-    conn = boto.ec2.connection.EC2Connection(region=options['region'])
-    reservations = conn.get_all_instances(
-        filters={'tag-key': 'Name', 'tag-value': self.options['name']})
-
-    # stop instances
-    return [instance.terminate() for instance in reservation.instances
-            for reservation in reservations if instance.state == u'running']
-
-
-# EC2 ebs-based instance
-
-
-# AWS meta-recipe
-class AWS(zc.metarecipe.Recipe):
-    '''Meta recipe to create a AWS cluster
-    '''
-
-    def __init__(self, buildout, name, options):
-        super(AWS, self).__init__(buildout, name, options)
-
-        zk = zc.zk.ZK(ZK_LOCATION)
-
-        zk_options = zk.properties(
-            '/' + name.replace(',', '/').rsplit('.', 1)[0]
-        )
-
-        self['ebs_volumes'] = dict(
-            recipe = 'zc.awsrecipes.EBS',
-        )
-
-        self['ec2_instances'] = dict(
-            recipe = 'zc.awsrecipes.EC2',
-        )
+if __name__ == '__main__':
+    main()
