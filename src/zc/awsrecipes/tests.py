@@ -70,7 +70,8 @@ class Reservation(Ob):
 
 class Connection:
 
-    def __init__(self):
+    def __init__(self, name):
+        self.name = name
         self.volumes = []
         self.instances = []
         self.resources = {}
@@ -81,9 +82,19 @@ class Connection:
             Resource('gr4', vpc_id='vpc2', name='x'),
             ]
         self.subnets = [
-            Resource('subnet-41', vpc_id='vpc0'),
-            Resource('subnet-42', vpc_id='vpc1'),
-            Resource('subnet-43', vpc_id='vpc2'),
+            Resource('subnet-41', dict(scope='public'),  vpc_id='vpc1'),
+            Resource('subnet-42', dict(scope='private'), vpc_id='vpc1'),
+            Resource('subnet-43', dict(scope='public'),  vpc_id='vpc2'),
+            Resource('subnet-44', dict(scope='private'), vpc_id='vpc2'),
+            ]
+        self.vpcs = [
+            Resource(
+                'vpc1',
+                dict(Name='test_cluster', zone='us-up-1z'),
+                region=self, connection=self)
+            ]
+        self.images = [
+            Resource('ami-42', dict(Name='default'))
             ]
 
     def create_volume(self, size, zone):
@@ -105,8 +116,11 @@ class Connection:
 
             bad = False
             for name in filters:
-                assert_(name.startswith('tag:'))
-                if v.tags.get(name[4:]) != filters[name]:
+                if name.startswith('tag:'):
+                    if v.tags.get(name[4:]) != filters[name]:
+                        bad = True
+                        break
+                elif getattr(v, name) != filters[name]:
                     bad = True
                     break
             if not bad:
@@ -115,6 +129,9 @@ class Connection:
 
     def get_all_volumes(self, ids=None, filters={}):
         return self._get_all(self.volumes, ids, filters)
+
+    def get_all_vpcs(self, ids=None, filters={}):
+        return self._get_all(self.vpcs, ids, filters)
 
     def get_all_images(self, filters):
         return [Resource('ami-42')]
@@ -144,7 +161,7 @@ class Connection:
         return Resource('', instances=[instance])
 
 def setup(test):
-    connections = dict(test_region=Connection())
+    connections = dict(test_region=Connection('test_region'))
 
     @side_effect(
         setupstack.context_manager(
@@ -173,6 +190,9 @@ def setup(test):
                 ))))
 
     setupstack.context_manager(test, mock.patch('time.sleep'))
+    setupstack.context_manager(
+        test,
+        mock.patch('boto.ec2.regions', side_effect=connections.values))
 
     zc.zk.testing.setUp(test, '')
 

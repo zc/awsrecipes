@@ -15,17 +15,26 @@ def _zkargs(args):
     return zc.zk.ZK(zoo), path
 
 
+def find_cluster(cluster_name):
+    for region in boto.ec2.regions():
+        vpc_connection = boto.vpc.VPCConnection(region=region)
+        vpcs = vpc_connection.get_all_vpcs(filters={'tag:Name': cluster_name})
+        if vpcs:
+            [vpc] = vpcs
+            return vpc
+
 def _zk(zk, path):
 
     hosts = dict(zk.properties('/hosts'))
-    region = hosts['region']
+    cluster = hosts['cluster']
+    vpc = find_cluster(cluster)
+
     properties = dict(zk.properties(path))
 
     if 'zone' not in properties:
-        assert 'default-zone' in hosts, "no zone specified"
-        properties['zone'] = hosts['default-zone']
+        properties['zone'] = vpc.tags['zone']
 
-    return properties, hosts, boto.ec2.connect_to_region(region)
+    return properties, vpc, boto.ec2.connect_to_region(vpc.region.name)
 
 def assert_(cond, *message):
     if not cond:
@@ -37,13 +46,6 @@ def path_to_name(path):
 def tag_filter(**kw):
     return dict(('tag:'+name, kw[name]) for name in kw)
 
-def default_security_group_for_subnet(region, subnet_id):
-    vpc_conn = boto.vpc.VPCConnection(region=boto.ec2.get_region(region))
-    [sub] = vpc_conn.get_all_subnets([subnet_id])
-    [group] = [g for g in vpc_conn.get_all_security_groups()
-               if g.name == 'default' and g.vpc_id == sub.vpc_id
-               ]
-    return group.id
 
 def who():
     return "%s (%s)" % (
@@ -61,7 +63,7 @@ def lebs_main(args=None):
 
 def lebs(zk, path):
 
-    properties, hosts, conn = _zk(zk, path)
+    properties, _, conn = _zk(zk, path)
 
     size = properties['size']
     existing = set()
@@ -113,11 +115,10 @@ def storage_server_main(args=None):
 
 
 def storage_server(zk, path):
-    properties, hosts, conn = _zk(zk, path)
+    properties, vpc, conn = _zk(zk, path)
     hostname = path.rsplit('/', 1)[1]
 
-    existing = conn.get_all_instances(
-        filters=tag_filter(Name=hostname))
+    existing = conn.get_all_instances(filters=tag_filter(Name=hostname))
     assert_(not existing, "%s exists" % hostname)
 
     vdata = []
@@ -128,22 +129,33 @@ def storage_server(zk, path):
         vproperties = zk.properties(vpath)
         vdata.append((vpath, replica, vproperties))
 
-    subnet_id = hosts['subnet']
+    [subnet] = vpc.connection.get_all_subnets(
+        filters={'tag:scope': 'private', 'vpc_id': vpc.id})
+    subnet_id = subnet.id
+
+    [group_id] = [
+        g.id
+        for g in vpc.connection.get_all_security_groups(
+            filters=dict(vpc_id=vpc.id))
+        if g.name == 'default'
+        ]
 
     role = properties.get(
         'role', path[1:].rsplit('/')[0].replace('/', ',')+',storage')
 
+    [image_id] = [i.id for i in conn.get_all_images(
+        filters={'tag:Name': properties.get('ami', 'default')})]
+
     reservation = conn.run_instances(
-        image_id = hosts['ami'],
-        security_group_ids=[default_security_group_for_subnet(
-            hosts['region'], subnet_id)],
+        image_id = image_id,
+        instance_type=properties['instance-type'],
+        subnet_id = subnet_id,
+        security_group_ids=[group_id],
         user_data=storage_user_data_template % dict(
             role=role,
             hostname=hostname,
             path=path,
             ),
-        instance_type=properties['instance-type'],
-        subnet_id = subnet_id,
         )
     instance = reservation.instances[0]
 
