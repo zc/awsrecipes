@@ -311,3 +311,129 @@ server won't be created:
      'id': 'inst0',
      'tags': {'Name': 'storage.example.com',
               'creator': 'testy (Testy Tester)'}})
+
+Setting up the volumns on the storage servers
+=============================================
+
+After the storage server is created, and the volumns are attached, we
+need to set up the software raid, the logical volumes, and the mounts.
+
+The setup_volumes scripts does this. It's run on the storage server
+when it's created, as part of the user-data script (as shown in the
+previous section). It can also be run later when additional ebs
+volumes are added.
+
+The script has to be careful to preserve any data that might already
+be in the volume.  It does this by:
+
+- Scanning the software raid and adding new raid volumes when it sees
+  unconfigured ebs volumes and
+
+- Scanning LVM data and adding new raid volumes to logical volumes, as
+  necessary.
+
+
+    >>> setup_volumes = pkg_resources.load_entry_point(
+    ...     dist, 'console_scripts', 'setup-volumes')
+
+Let's start with new ebs volumes.  For testing, we have a simulated
+machine that we can initialize to similate a system and ebs volumes.
+We'll start with 4 clean new ebs volumes as defined in the tree model:
+
+    >>> volumes.init(['sdb1', 'sdb2', 'sdb3', 'sdb4'])
+
+Now, we'll call setup_volumes:
+
+    >>> setup_volumes(['zookeeper.example.com:2181',
+    ...                '/example/example.com/storage.example.com'])
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /sbin/mdadm -A --scan
+    /usr/sbin/vgscan
+    /usr/sbin/pvscan
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md0 sdb1 sdb2 sdb3 sdb4
+    /usr/sbin/vgcreate vg_sdb /dev/md0
+    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
+    /sbin/mkfs -t ext3 /dev/vg_sdb/data
+    /bin/mkdir -p /home/databases/example/example.com/volume
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+
+And if we look at the state of the setup machine, it's what we expect:
+
+    >>> volumes.status()
+    vg_sdb /home/databases/example/example.com/volume
+        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+
+If we terminate the machine and start a new machine with the same
+volumes:
+
+    >>> volumes.terminate()
+    >>> setup_volumes(['zookeeper.example.com:2181',
+    ...                '/example/example.com/storage.example.com'])
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /sbin/mdadm -A --scan
+    /usr/sbin/vgscan
+    /sbin/vgchange -a y vg_sdb
+    /usr/sbin/pvscan
+    /bin/mkdir -p /home/databases/example/example.com/volume
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+
+    >>> volumes.status()
+    vg_sdb /home/databases/example/example.com/volume
+        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+
+Let's try that again, but this time, we'll add some more disks::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 8
+           replicas = 3, 2
+       /volume2 : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+
+       /storage.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/volume 2'
+         sdc = '/example/example.com/volume2 2'
+
+.. -> tree
+
+    >>> zk.import_tree(tree, trim=True)
+
+Here, we've added disks to the first volume, and added a second
+volume.
+
+    >>> volumes.terminate()
+    >>> volumes.sds.extend(
+    ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
+
+    >>> setup_volumes(['zookeeper.example.com:2181',
+    ...                '/example/example.com/storage.example.com'])
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /sbin/mdadm -A --scan
+    /usr/sbin/vgscan
+    /sbin/vgchange -a y vg_sdb
+    /usr/sbin/pvscan
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md1 sdb5 sdb6 sdb7 sdb8
+    /usr/sbin/pvcreate /dev/md1
+    /usr/sbin/vgextend vg_sdb /dev/md1
+    /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
+    /sbin/resize2fs /dev/vg_sdb/data
+    /bin/mkdir -p /home/databases/example/example.com/volume
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md2 sdc1 sdc2 sdc3 sdc4
+    /usr/sbin/vgcreate vg_sdc /dev/md2
+    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
+    /sbin/mkfs -t ext3 /dev/vg_sdc/data
+    /bin/mkdir -p /home/databases/example/example.com/volume2
+    /bin/mount -t ext3 /dev/vg_sdc/data /home/databases/example/example.com/volume2
+
+    >>> volumes.status()
+    vg_sdb /home/databases/example/example.com/volume
+        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+        md1 [u'sdb5', u'sdb6', u'sdb7', u'sdb8']
+    vg_sdc /home/databases/example/example.com/volume2
+        md2 [u'sdc1', u'sdc2', u'sdc3', u'sdc4']

@@ -28,6 +28,7 @@ ec2 = zc.awsrecipes:uninstall_ec2_instance
 [console_scripts]
 lebs = zc.awsrecipes:lebs_main
 storage-server = zc.awsrecipes:storage_server_main
+setup-volumes = zc.awsrecipes:setup_volumes_main
 """
 
 from setuptools import setup
