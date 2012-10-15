@@ -1,5 +1,5 @@
 Name: awsrecipes
-Version: 0
+Version: 0.0.1
 Release: 1
 
 Summary: ZooKeeper Deployment
