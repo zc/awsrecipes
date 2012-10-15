@@ -265,15 +265,31 @@ def setup_volumes(zookkeeper, path):
     logical_volumes = {}
     expected_sdvols = set()
     ebsdev = re.compile(r'sd[a-z]$').match
+    vpaths = []
     for property_name, v in sorted(zk.properties(path).items()):
         m = ebsdev(property_name)
         if not m:
             continue
         vpath, replica = v.split()
-        nvols = zk.properties(vpath)['n']
+        vproperties = zk.properties(vpath)
+        nvols = vproperties['n']
         sdprefix = m.group(0)
+        vpath = vproperties.get('path', vpath.rsplit('/', 1)[0] or vpath)
+        if vpath in vpaths:
+            raise ValueError("Duplicate mount points", vpath)
+        else:
+            vpaths.append(vpath)
         logical_volumes[sdprefix] = LogicalVolume(sdprefix, nvols, vpath)
         expected_sdvols.update(logical_volumes[sdprefix].sdvols)
+
+    vpaths.sort()
+    for i in range(1, len(vpaths)):
+        vpathp = vpaths[i-1]
+        if not vpathp.endswith('/'):
+            vpathp += '/'
+        if vpaths[i].startswith(vpathp):
+            raise ValueError("One mount point is a prefix of another",
+                             vpathp, vpaths[i])
 
     # Wait for all of our expected sd volumes to appear. (They may be
     # attaching.)

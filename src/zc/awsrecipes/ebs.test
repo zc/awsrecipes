@@ -354,14 +354,17 @@ Now, we'll call setup_volumes:
     /usr/sbin/vgcreate vg_sdb /dev/md0
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
     /sbin/mkfs -t ext3 /dev/vg_sdb/data
-    /bin/mkdir -p /home/databases/example/example.com/volume
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+    /bin/mkdir -p /home/databases/example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
 
 And if we look at the state of the setup machine, it's what we expect:
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com/volume
+    vg_sdb /home/databases/example/example.com
         md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+
+Note that the mount point defaults to the volume path without the past
+path segment.
 
 If we terminate the machine and start a new machine with the same
 volumes:
@@ -374,11 +377,11 @@ volumes:
     /usr/sbin/vgscan
     /sbin/vgchange -a y vg_sdb
     /usr/sbin/pvscan
-    /bin/mkdir -p /home/databases/example/example.com/volume
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+    /bin/mkdir -p /home/databases/example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com/volume
+    vg_sdb /home/databases/example/example.com
         md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
 
 Let's try that again, but this time, we'll add some more disks::
@@ -412,6 +415,72 @@ volume.
 
     >>> setup_volumes(['zookeeper.example.com:2181',
     ...                '/example/example.com/storage.example.com'])
+    Traceback (most recent call last):
+    ...
+    ValueError: ('Duplicate mount points', u'/example/example.com')
+
+Oops. Remember that by default, the volume path *without* the last
+path segment is the default mount point.  In this case, this leads to
+duplication.  We can provide an explicit path::
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 8
+           replicas = 3, 2
+       /volume2 : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+           path = '/example/example.com/volume2'
+
+       /storage.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/volume 2'
+         sdc = '/example/example.com/volume2 2'
+
+.. -> tree
+
+    >>> zk.import_tree(tree, trim=True)
+
+But we'll still get an error::
+
+    >>> setup_volumes(['zookeeper.example.com:2181',
+    ...                '/example/example.com/storage.example.com'])
+    ... # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+    ...
+    ValueError: ('One mount point is a prefix of another',
+                 u'/example/example.com/', u'/example/example.com/volume2')
+
+Here we failed because our mountpoints overlap. Not good.  Let's try
+again:
+
+  /example
+    /example.com
+       /volume : lebs
+           size = 1
+           n = 8
+           replicas = 3, 2
+       /volume2 : lebs
+           size = 1
+           n = 4
+           replicas = 3, 2
+           path = '/example/other'
+
+       /storage.example.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example.com/volume 2'
+         sdc = '/example/example.com/volume2 2'
+
+
+.. -> tree
+
+    >>> zk.import_tree(tree, trim=True)
+
+    >>> setup_volumes(['zookeeper.example.com:2181',
+    ...                '/example/example.com/storage.example.com'])
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
@@ -422,18 +491,18 @@ volume.
     /usr/sbin/vgextend vg_sdb /dev/md1
     /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
     /sbin/resize2fs /dev/vg_sdb/data
-    /bin/mkdir -p /home/databases/example/example.com/volume
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com/volume
+    /bin/mkdir -p /home/databases/example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
     /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md2 sdc1 sdc2 sdc3 sdc4
     /usr/sbin/vgcreate vg_sdc /dev/md2
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
     /sbin/mkfs -t ext3 /dev/vg_sdc/data
-    /bin/mkdir -p /home/databases/example/example.com/volume2
-    /bin/mount -t ext3 /dev/vg_sdc/data /home/databases/example/example.com/volume2
+    /bin/mkdir -p /home/databases/example/other
+    /bin/mount -t ext3 /dev/vg_sdc/data /home/databases/example/other
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com/volume
+    vg_sdb /home/databases/example/example.com
         md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
         md1 [u'sdb5', u'sdb6', u'sdb7', u'sdb8']
-    vg_sdc /home/databases/example/example.com/volume2
+    vg_sdc /home/databases/example/other
         md2 [u'sdc1', u'sdc2', u'sdc3', u'sdc4']
