@@ -5,7 +5,7 @@ Release: 1
 Summary: ZooKeeper Deployment
 Group: Applications/ZIM
 Requires: cleanpython26
-Requires: sbo
+Requires: mdadm
 BuildRequires: cleanpython26
 %define python /opt/cleanpython26/bin/python
 
