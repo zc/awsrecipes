@@ -312,6 +312,144 @@ server won't be created:
      'tags': {'Name': 'storage.example.com',
               'creator': 'testy (Testy Tester)'}})
 
+Let's try multiple volumes:
+
+  /example
+    /example2.com
+       /volume : lebs
+           size = 1
+           n = 4
+           replicas = 2
+       /v2 : lebs
+           size = 1
+           n = 4
+           replicas = 2
+
+       /storage.example2.com : storage-server
+         instance-type = 'm1.large'
+         sdb = '/example/example2.com/volume 2'
+         sdc = '/example/example2.com/v2 2'
+
+.. -> tree
+
+    >>> zk.import_tree(tree)
+    extra path not trimmed: /example/example.com
+
+    >>> server(['zookeeper.example.com:2181',
+    ...        '/example/example2.com/storage.example2.com'])
+    Traceback (most recent call last):
+    ...
+    AssertionError: ('Missing volumes', u'/example/example2.com/volume', 4, [])
+
+Oops, we forgot to create the new volumes:
+
+    >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/volume'])
+    created /example/example2.com/volume 2-1
+    created /example/example2.com/volume 2-2
+    created /example/example2.com/volume 2-3
+    created /example/example2.com/volume 2-4
+    >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/v2'])
+    created /example/example2.com/v2 2-1
+    created /example/example2.com/v2 2-2
+    created /example/example2.com/v2 2-3
+    created /example/example2.com/v2 2-4
+
+    >>> server(['zookeeper.example.com:2181',
+    ...        '/example/example2.com/storage.example2.com'])
+
+
+Double check the new attachments.
+
+    >>> for volume in conn.volumes:
+    ...     print volume
+    ... # doctest: +ELLIPSIS
+    Volume({'id': 'vol0',
+    ...
+    Volume({'attach_data': AttachmentSet({'device': u'sdb1',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol10',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/volume 2-1',
+              'creator': 'testy (Testy Tester)',
+              'index': '1',
+              'logical': '/example/example2.com/volume',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb2',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol11',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/volume 2-2',
+              'creator': 'testy (Testy Tester)',
+              'index': '2',
+              'logical': '/example/example2.com/volume',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb3',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol12',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/volume 2-3',
+              'creator': 'testy (Testy Tester)',
+              'index': '3',
+              'logical': '/example/example2.com/volume',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdb4',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol13',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/volume 2-4',
+              'creator': 'testy (Testy Tester)',
+              'index': '4',
+              'logical': '/example/example2.com/volume',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdc1',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol14',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/v2 2-1',
+              'creator': 'testy (Testy Tester)',
+              'index': '1',
+              'logical': '/example/example2.com/v2',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdc2',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol15',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/v2 2-2',
+              'creator': 'testy (Testy Tester)',
+              'index': '2',
+              'logical': '/example/example2.com/v2',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdc3',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol16',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/v2 2-3',
+              'creator': 'testy (Testy Tester)',
+              'index': '3',
+              'logical': '/example/example2.com/v2',
+              'replica': '2'},
+     'zone': 'us-up-1z'})
+    Volume({'attach_data': AttachmentSet({'device': u'sdc4',
+     'instance_id': 'inst1',
+     'status': 'attached'}),
+     'id': 'vol17',
+     'size': 1,
+     'tags': {'Name': '/example/example2.com/v2 2-4',
+     ...
+
 Setting up the volumns on the storage servers
 =============================================
 

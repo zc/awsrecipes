@@ -76,7 +76,10 @@ def lebs(zk, path):
         existing.add(vol.tags['Name'])
 
     needed = set()
-    for replica in properties['replicas']:
+    replicas = properties['replicas']
+    if not isinstance(replicas, (tuple, list)):
+        replicas = (replicas, )
+    for replica in replicas:
         for index in range(1, properties['n'] + 1):
             name = "%s %s-%s" % (path, replica, index)
             needed.add(name)
@@ -129,7 +132,24 @@ def storage_server(zk, path):
             continue
         vpath, replica = properties[name].split()
         vproperties = zk.properties(vpath)
-        vdata.append((vpath, replica, vproperties))
+
+        vols = []
+        for vol in conn.get_all_volumes(
+            filters=tag_filter(
+                logical=vpath,
+                replica=replica,
+                )):
+            vols.append(vol)
+
+        if (sorted(v.tags['index'] for v in vols) !=
+            map(str, range(1, vproperties['n'] + 1))
+            ):
+            raise AssertionError(
+                "Missing volumes",
+                vpath, vproperties['n'],
+                sorted(v.tags['index'] for v in vols)
+                )
+        vdata.append((name, vols))
 
     [subnet] = vpc.connection.get_all_subnets(
         filters={'tag:scope': 'private', 'vpc_id': vpc.id})
@@ -173,12 +193,8 @@ def storage_server(zk, path):
             break
         print state
 
-    for vpath, replica, vproperties in vdata:
-        for vol in conn.get_all_volumes(
-            filters=tag_filter(
-                logical=vpath,
-                replica=replica,
-                )):
+    for name, vols in vdata:
+        for vol in vols:
             vol.attach(instance.id, name+vol.tags['index'])
 
 def s(command):
