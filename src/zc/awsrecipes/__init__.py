@@ -104,8 +104,7 @@ def lebs(zk, path):
 storage_user_data_template = """#!/bin/sh
 echo %(role)r > /etc/zim/role
 hostname %(hostname)s
-/usr/bin/yum -y install awsrecipes
-/opt/awsrecipes/bin/setup_volumes %(path)s
+echo '%(volumes)s' > /etc/zim/volumes
 """
 
 
@@ -129,11 +128,19 @@ def storage_server(zk, path):
     assert_(not existing, "%s exists" % hostname)
 
     vdata = []
+    user_data_volumes = ''
+    mount_points = []
     for name in properties:
         if not name.startswith('sd'):
             continue
         vpath, replica = properties[name].split()
         vproperties = zk.properties(vpath)
+        mount_point = vproperties.get('path') or vpath.rsplit('/', 1)[0]
+        mount_points.append(mount_point)
+        user_data_volumes += '%s %s\n' % (
+            mount_point,
+            ' '.join('%s%s' % (name, i+1) for i in range(vproperties['n']))
+            )
 
         vols = []
         for vol in conn.get_all_volumes(
@@ -152,6 +159,16 @@ def storage_server(zk, path):
                 sorted(v.tags['index'] for v in vols)
                 )
         vdata.append((name, vols))
+
+    mount_points.sort()
+    for i in range(1, len(mount_points)):
+        for j in range(i):
+            mount_pointp = mount_points[j]
+            if not mount_pointp.endswith('/'):
+                mount_pointp += '/'
+                if mount_points[i].startswith(mount_pointp):
+                    raise ValueError("One mount point is a prefix of another",
+                                     mount_pointp, mount_points[i])
 
     [subnet] = vpc.connection.get_all_subnets(
         filters={'tag:scope': 'private', 'vpc_id': vpc.id})
@@ -178,7 +195,7 @@ def storage_server(zk, path):
         user_data=storage_user_data_template % dict(
             role=role,
             hostname=hostname,
-            path=path,
+            volumes = user_data_volumes,
             ),
         )
     instance = reservation.instances[0]

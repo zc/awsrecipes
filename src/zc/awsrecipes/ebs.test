@@ -165,15 +165,29 @@ To add a server, we'll use the storage-server command:
 At this point, we have a storage server:
 
     >>> for instance in conn.instances:
+    ...     print '==='
     ...     print instance
+    ...     print '---'
+    ...     print instance.attrs['userData']
+    ...     print '==='
+    ... # doctest: +ELLIPSIS
+    ===
     Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
      'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
      'tags': {},
      'vpc_id': 'vpc1'})],
-               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.test_cluster.aws.zope.net\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage\n"},
+               'userData': ...
      'id': 'inst0',
      'tags': {'Name': 'storage.test_cluster.aws.zope.net',
               'creator': 'testy (Testy Tester)'}})
+    ---
+    #!/bin/sh
+    echo 'example,storage' > /etc/zim/role
+    hostname storage.test_cluster.aws.zope.net
+    echo '/example/example.com sdb1 sdb2 sdb3 sdb4
+    ' > /etc/zim/volumes
+    <BLANKLINE>
+    ===
 
 And the relevent volumes are attached:
 
@@ -302,15 +316,29 @@ server won't be created:
     NoNodeException: /example/example.com/database
 
     >>> for instance in conn.instances:
+    ...     print '==='
     ...     print instance
+    ...     print '---'
+    ...     print instance.attrs['userData']
+    ...     print '==='
+    ... # doctest: +ELLIPSIS
+    ===
     Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
      'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
      'tags': {},
      'vpc_id': 'vpc1'})],
-               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.test_cluster.aws.zope.net\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage\n"},
+               'userData': ...
      'id': 'inst0',
      'tags': {'Name': 'storage.test_cluster.aws.zope.net',
               'creator': 'testy (Testy Tester)'}})
+    ---
+    #!/bin/sh
+    echo 'example,storage' > /etc/zim/role
+    hostname storage.test_cluster.aws.zope.net
+    echo '/example/example.com sdb1 sdb2 sdb3 sdb4
+    ' > /etc/zim/volumes
+    <BLANKLINE>
+    ===
 
 Let's try multiple volumes:
 
