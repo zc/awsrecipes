@@ -276,7 +276,10 @@ def setup_volumes(zookkeeper, path):
     # The volumes may have been set up before on a previos machine.
     # Scan for them:
     s('/sbin/mdadm --examine --scan >>/etc/mdadm.conf')
-    s('/sbin/mdadm -A --scan')
+    f = open('/etc/mdadm.conf')
+    if f.read().strip():
+        s('/sbin/mdadm -A --scan')
+    f.close()
 
     # Get what we want from the ZK tree
     zk = zc.zk.ZK(zookkeeper)

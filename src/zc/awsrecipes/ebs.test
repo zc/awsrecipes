@@ -486,7 +486,6 @@ Now, we'll call setup_volumes:
     ...                '/example/example.com/storage'])
     ... # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
-    /sbin/mdadm -A --scan
     /usr/sbin/vgscan
     /usr/sbin/pvscan
     /sbin/mdadm --create --metadata 1.2 -l10 -n4

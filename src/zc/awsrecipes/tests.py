@@ -226,6 +226,8 @@ class FauxVolumes:
         return exists_original(name)
 
     def open(self, name):
+        if name == '/etc/mdadm.conf':
+            return StringIO.StringIO('x' if self.examined_mds else '')
         assert_(name=='/proc/mdstat')
         return StringIO.StringIO(self.mdstat())
 
@@ -263,8 +265,8 @@ class FauxVolumes:
         if command == '/sbin/mdadm --examine --scan >>/etc/mdadm.conf':
             self.examined_mds = self.preexisting_mds
         elif command == '/sbin/mdadm -A --scan':
+            assert_(self.examined_mds)
             self.mds.update(self.examined_mds)
-            self.examined_mds.clear()
         elif args[1:5] == '--create --metadata 1.2 -l10'.split():
             n, md = args[5:7]
             assert_(md.startswith('/dev/'))
@@ -279,6 +281,8 @@ class FauxVolumes:
             self.mds[md] = sds
         else:
             assert_(0, "Unexpected command %r" % command)
+
+        self.preexisting_mds = self.mds.copy()
 
     def mkdir(self, command, p):
         args = command.split()
