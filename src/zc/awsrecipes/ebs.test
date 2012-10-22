@@ -144,7 +144,7 @@ servers.  We'll start with one::
            n = 4
            replicas = 3, 2
 
-       /storage.example.com : storage-server
+       /storage : storage-server
          instance-type = 'm1.large'
          sdb = '/example/example.com/volume 2'
 
@@ -159,7 +159,7 @@ To add a server, we'll use the storage-server command:
 
 
     >>> server(['zookeeper.example.com:2181',
-    ...        '/example/example.com/storage.example.com'])
+    ...        '/example/example.com/storage'])
 
 
 At this point, we have a storage server:
@@ -167,12 +167,12 @@ At this point, we have a storage server:
     >>> for instance in conn.instances:
     ...     print instance
     Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
-     'name': 'default',
+     'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
      'tags': {},
      'vpc_id': 'vpc1'})],
-               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.example.com\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
+               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.test_cluster.aws.zope.net\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage\n"},
      'id': 'inst0',
-     'tags': {'Name': 'storage.example.com',
+     'tags': {'Name': 'storage.test_cluster.aws.zope.net',
               'creator': 'testy (Testy Tester)'}})
 
 And the relevent volumes are attached:
@@ -285,7 +285,7 @@ server won't be created:
            n = 4
            replicas = 3, 2
 
-       /storage.example.com : storage-server
+       /storage : storage-server
          instance-type = 'm1.large'
          sdb = '/example/example.com/volume 2'
        /storage2.example.com : storage-server
@@ -304,12 +304,12 @@ server won't be created:
     >>> for instance in conn.instances:
     ...     print instance
     Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
-     'name': 'default',
+     'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
      'tags': {},
      'vpc_id': 'vpc1'})],
-               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.example.com\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage.example.com\n"},
+               'userData': "#!/bin/sh\necho 'example,storage' > /etc/zim/role\nhostname storage.test_cluster.aws.zope.net\n/usr/bin/yum -y install awsrecipes\n/opt/awsrecipes/bin/setup_volumes /example/example.com/storage\n"},
      'id': 'inst0',
-     'tags': {'Name': 'storage.example.com',
+     'tags': {'Name': 'storage.test_cluster.aws.zope.net',
               'creator': 'testy (Testy Tester)'}})
 
 Let's try multiple volumes:
@@ -483,12 +483,14 @@ We'll start with 4 clean new ebs volumes as defined in the tree model:
 Now, we'll call setup_volumes:
 
     >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage.example.com'])
+    ...                '/example/example.com/storage'])
+    ... # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
     /usr/sbin/pvscan
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md0 sdb1 sdb2 sdb3 sdb4
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+       /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
     /usr/sbin/vgcreate vg_sdb /dev/md0
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
     /sbin/mkfs -t ext3 /dev/vg_sdb/data
@@ -509,7 +511,7 @@ volumes:
 
     >>> volumes.terminate()
     >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage.example.com'])
+    ...                '/example/example.com/storage'])
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
@@ -535,7 +537,7 @@ Let's try that again, but this time, we'll add some more disks::
            n = 4
            replicas = 3, 2
 
-       /storage.example.com : storage-server
+       /storage : storage-server
          instance-type = 'm1.large'
          sdb = '/example/example.com/volume 2'
          sdc = '/example/example.com/volume2 2'
@@ -552,7 +554,7 @@ volume.
     ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
 
     >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage.example.com'])
+    ...                '/example/example.com/storage'])
     Traceback (most recent call last):
     ...
     ValueError: ('Duplicate mount points', u'/example/example.com')
@@ -573,7 +575,7 @@ duplication.  We can provide an explicit path::
            replicas = 3, 2
            path = '/example/example.com/volume2'
 
-       /storage.example.com : storage-server
+       /storage : storage-server
          instance-type = 'm1.large'
          sdb = '/example/example.com/volume 2'
          sdc = '/example/example.com/volume2 2'
@@ -585,7 +587,7 @@ duplication.  We can provide an explicit path::
 But we'll still get an error::
 
     >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage.example.com'])
+    ...                '/example/example.com/storage'])
     ... # doctest: +NORMALIZE_WHITESPACE
     Traceback (most recent call last):
     ...
@@ -607,7 +609,7 @@ again:
            replicas = 3, 2
            path = '/example/other'
 
-       /storage.example.com : storage-server
+       /storage : storage-server
          instance-type = 'm1.large'
          sdb = '/example/example.com/volume 2'
          sdc = '/example/example.com/volume2 2'
@@ -618,20 +620,23 @@ again:
     >>> zk.import_tree(tree, trim=True)
 
     >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage.example.com'])
+    ...                '/example/example.com/storage'])
+    ... # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
     /sbin/vgchange -a y vg_sdb
     /usr/sbin/pvscan
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md1 sdb5 sdb6 sdb7 sdb8
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+       /dev/md1 /dev/sdb5 /dev/sdb6 /dev/sdb7 /dev/sdb8
     /usr/sbin/pvcreate /dev/md1
     /usr/sbin/vgextend vg_sdb /dev/md1
     /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
     /sbin/resize2fs /dev/vg_sdb/data
     /bin/mkdir -p /home/databases/example/example.com
     /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4 /dev/md2 sdc1 sdc2 sdc3 sdc4
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+         /dev/md2 /dev/sdc1 /dev/sdc2 /dev/sdc3 /dev/sdc4
     /usr/sbin/vgcreate vg_sdc /dev/md2
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
     /sbin/mkfs -t ext3 /dev/vg_sdc/data

@@ -81,21 +81,23 @@ class Connection:
         self.instances = []
         self.resources = {}
         self.security_groups = [
-            Resource('gr1', vpc_id='vpc1', name='default'),
-            Resource('gr2', vpc_id='vpc1', name='x'),
-            Resource('gr3', vpc_id='vpc2', name='default'),
-            Resource('gr4', vpc_id='vpc2', name='x'),
+            Resource('gr1', vpc_id='vpc1',
+                     name='two-VPCSecurityGroup-QHALEVN2EWCD'),
+            Resource('gr2', vpc_id='vpc1', name='2'),
+            Resource('gr3', vpc_id='vpc2', name='3'),
+            Resource('gr4', vpc_id='vpc2', name='4'),
             ]
         self.subnets = [
             Resource('subnet-41', dict(scope='public'),  vpc_id='vpc1'),
-            Resource('subnet-42', dict(scope='private'), vpc_id='vpc1'),
+            Resource('subnet-42', dict(scope='private'), vpc_id='vpc1',
+                     availability_zone='us-up-1z'),
             Resource('subnet-43', dict(scope='public'),  vpc_id='vpc2'),
             Resource('subnet-44', dict(scope='private'), vpc_id='vpc2'),
             ]
         self.vpcs = [
             Resource(
                 'vpc1',
-                dict(Name='test_cluster', zone='us-up-1z'),
+                dict(Name='test_cluster'),
                 region=self, connection=self)
             ]
         self.images = [
@@ -194,6 +196,7 @@ class FauxVolumes:
                              side_effect=self.open))
 
         def Popen(command, stdout=None, stderr=None, shell=False):
+            assert_(shell)
             meth = getattr(self, command.split()[0].rsplit('/', 1)[1])
             return FauxPopen(meth, command, stdout, stderr)
         setupstack.context_manager(
@@ -267,6 +270,8 @@ class FauxVolumes:
             assert_(md.startswith('/dev/'))
             md = md[5:]
             sds = args[7:]
+            assert_(not [sd for sd in sds if not sd.startswith('/dev/')])
+            sds = [sd[5:] for sd in sds]
             assert_(md not in self.mds)
             assert_(n == ('-n%s' % len(sds)))
             assert_(len(set(sds)) == len(sds))

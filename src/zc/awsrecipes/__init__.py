@@ -33,9 +33,6 @@ def _zk(zk, path):
 
     properties = dict(zk.properties(path))
 
-    if 'zone' not in properties:
-        properties['zone'] = vpc.tags['zone']
-
     return properties, vpc, boto.ec2.connect_to_region(vpc.region.name)
 
 def assert_(cond, *message):
@@ -65,7 +62,10 @@ def lebs_main(args=None):
 
 def lebs(zk, path):
 
-    properties, _, conn = _zk(zk, path)
+    properties, vpc, conn = _zk(zk, path)
+
+    [subnet] = vpc.connection.get_all_subnets(
+        filters={'tag:scope': 'private', 'vpc_id': vpc.id})
 
     size = properties['size']
     existing = set()
@@ -86,7 +86,7 @@ def lebs(zk, path):
             if name in existing:
                 print 'exists', name
             else:
-                vol = conn.create_volume(size, properties['zone'])
+                vol = conn.create_volume(size, subnet.availability_zone)
                 conn.create_tags(
                     [vol.id], dict(
                         Name=name,
@@ -122,6 +122,8 @@ def storage_server_main(args=None):
 def storage_server(zk, path):
     properties, vpc, conn = _zk(zk, path)
     hostname = path.rsplit('/', 1)[1]
+    domain = vpc.tags['Name']+'.aws.zope.net'
+    hostname += '.' + domain
 
     existing = conn.get_all_instances(filters=tag_filter(Name=hostname))
     assert_(not existing, "%s exists" % hostname)
@@ -159,7 +161,7 @@ def storage_server(zk, path):
         g.id
         for g in vpc.connection.get_all_security_groups(
             filters=dict(vpc_id=vpc.id))
-        if g.name == 'default'
+        if '-VPCSecurityGroup-' in g.name
         ]
 
     role = properties.get(
@@ -199,13 +201,13 @@ def storage_server(zk, path):
 
 def s(command):
     print command
-    if subprocess.call(command):
+    if subprocess.call(command, shell=True):
         raise SystemError(command)
 
 def p(command):
     print command
     f = tempfile.TemporaryFile('awsrecipes')
-    if subprocess.call(command, stdout=f, stderr=subprocess.STDOUT):
+    if subprocess.call(command, stdout=f, stderr=subprocess.STDOUT, shell=True):
         raise SystemError(command)
     f.seek(0)
     for line in f:
@@ -246,7 +248,7 @@ class LogicalVolume:
             while os.path.exists('/dev/md%s' % mdnum):
                 mdnum += 1
             s('/sbin/mdadm --create --metadata 1.2 -l10 -n%s /dev/md%s %s'
-              % (len(unused), mdnum, ' '.join(unused))
+              % (len(unused), mdnum, ' '.join('/dev/' + u for u in unused))
               )
             if self.logical:
                 s('/usr/sbin/pvcreate /dev/md%s' % mdnum)
