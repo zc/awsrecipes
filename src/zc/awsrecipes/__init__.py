@@ -104,8 +104,7 @@ def lebs(zk, path):
 storage_user_data_template = """#!/bin/sh
 echo %(role)r > /etc/zim/role
 hostname %(hostname)s
-/usr/bin/yum -y install awsrecipes
-/opt/awsrecipes/bin/setup_volumes %(path)s
+echo '%(volumes)s' > /etc/zim/volumes
 """
 
 
@@ -129,11 +128,19 @@ def storage_server(zk, path):
     assert_(not existing, "%s exists" % hostname)
 
     vdata = []
+    user_data_volumes = ''
+    mount_points = []
     for name in properties:
         if not name.startswith('sd'):
             continue
         vpath, replica = properties[name].split()
         vproperties = zk.properties(vpath)
+        mount_point = vproperties.get('path') or vpath.rsplit('/', 1)[0]
+        mount_points.append(mount_point)
+        user_data_volumes += '%s %s\n' % (
+            mount_point,
+            ' '.join('%s%s' % (name, i+1) for i in range(vproperties['n']))
+            )
 
         vols = []
         for vol in conn.get_all_volumes(
@@ -152,6 +159,16 @@ def storage_server(zk, path):
                 sorted(v.tags['index'] for v in vols)
                 )
         vdata.append((name, vols))
+
+    mount_points.sort()
+    for i in range(1, len(mount_points)):
+        for j in range(i):
+            mount_pointp = mount_points[j]
+            if not mount_pointp.endswith('/'):
+                mount_pointp += '/'
+                if mount_points[i].startswith(mount_pointp):
+                    raise ValueError("One mount point is a prefix of another",
+                                     mount_pointp, mount_points[i])
 
     [subnet] = vpc.connection.get_all_subnets(
         filters={'tag:scope': 'private', 'vpc_id': vpc.id})
@@ -178,7 +195,7 @@ def storage_server(zk, path):
         user_data=storage_user_data_template % dict(
             role=role,
             hostname=hostname,
-            path=path,
+            volumes = user_data_volumes,
             ),
         )
     instance = reservation.instances[0]
@@ -216,14 +233,13 @@ def p(command):
 
 class LogicalVolume:
 
-    def __init__(self, name, count, path):
+    def __init__(self, name, sdvols, path):
         self.name = name
-        self.count = count
         self.path = path
         self.mds = set()
         self.pvs = set()
         self.used = set()
-        self.sdvols = set('%s%s' % (name, i+1) for i in range(count))
+        self.sdvols = set(sdvols)
         self.logical = False
 
     def add_md(self, mdnum, volumes):
@@ -269,7 +285,7 @@ class LogicalVolume:
         s('/bin/mount -t ext3 /dev/vg_%s/data %s' % (self.name, path))
 
 
-def setup_volumes(zookkeeper, path):
+def setup_volumes():
     """Set up md (raid) and lvm modules on a new machine
     """
 
@@ -282,41 +298,28 @@ def setup_volumes(zookkeeper, path):
     f.close()
 
     # Get what we want from the ZK tree
-    zk = zc.zk.ZK(zookkeeper)
     logical_volumes = {}
     expected_sdvols = set()
-    ebsdev = re.compile(r'sd[a-z]$').match
-    vpaths = []
-    for property_name, v in sorted(zk.properties(path).items()):
-        m = ebsdev(property_name)
-        if not m:
+    f = open('/etc/zim/volumes')
+    for line in f:
+        line = line.strip()
+        if not line:
             continue
-        vpath, replica = v.split()
-        vproperties = zk.properties(vpath)
-        nvols = vproperties['n']
-        sdprefix = m.group(0)
-        vpath = vproperties.get('path', vpath.rsplit('/', 1)[0] or vpath)
-        if vpath in vpaths:
-            raise ValueError("Duplicate mount points", vpath)
-        else:
-            vpaths.append(vpath)
-        logical_volumes[sdprefix] = LogicalVolume(sdprefix, nvols, vpath)
-        expected_sdvols.update(logical_volumes[sdprefix].sdvols)
+        sdvols = line.split()
+        mount_point = sdvols.pop(0)
+        assert len(set(sdvol[:3] for sdvol in sdvols)) == 1, (
+            "Multiple device prefixes")
+        sdprefix = sdvols[0][:3]
+        logical_volumes[sdprefix] = LogicalVolume(sdprefix, sdvols, mount_point)
+        expected_sdvols.update(sdvols)
 
-    vpaths.sort()
-    for i in range(1, len(vpaths)):
-        vpathp = vpaths[i-1]
-        if not vpathp.endswith('/'):
-            vpathp += '/'
-        if vpaths[i].startswith(vpathp):
-            raise ValueError("One mount point is a prefix of another",
-                             vpathp, vpaths[i])
 
     # Wait for all of our expected sd volumes to appear. (They may be
     # attaching.)
     for v in expected_sdvols:
-        while not os.path.exists('/dev/'+v):
-            time.sleep(.1)
+        v = '/dev/' + v
+        while not os.path.exists(v):
+            time.sleep(1)
 
     # Read /proc/mdstat to find out about existing raid volumes:
     mdstat = re.compile(r'md(\w+) : (\w+) (\w+) (.+)$').match
@@ -381,7 +384,6 @@ def setup_volumes(zookkeeper, path):
 def setup_volumes_main(args=None):
     if args is None:
         args = sys.argv[1:]
-    parser = optparse.OptionParser("""Usage: %prog ZOO PATH""")
+    assert not args
 
-    options, args = parser.parse_args(args)
-    setup_volumes(*args)
+    setup_volumes()
