@@ -228,6 +228,8 @@ class FauxVolumes:
     def open(self, name):
         if name == '/etc/mdadm.conf':
             return StringIO.StringIO('x' if self.examined_mds else '')
+        elif name == '/etc/zim/volumes':
+            return StringIO.StringIO(self.etc_zim_volumes)
         assert_(name=='/proc/mdstat')
         return StringIO.StringIO(self.mdstat())
 

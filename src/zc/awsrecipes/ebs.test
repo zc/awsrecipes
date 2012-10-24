@@ -485,8 +485,7 @@ After the storage server is created, and the volumns are attached, we
 need to set up the software raid, the logical volumes, and the mounts.
 
 The setup-volumes scripts does this. It's run on the storage server
-when it's created, as part of the user-data script (as shown in the
-previous section). It can also be run later when additional ebs
+when it's created. It can also be run later when additional ebs
 volumes are added.
 
 The script has to be careful to preserve any data that might already
@@ -510,9 +509,8 @@ We'll start with 4 clean new ebs volumes as defined in the tree model:
 
 Now, we'll call setup_volumes:
 
-    >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage'])
-    ... # doctest: +NORMALIZE_WHITESPACE
+    >>> volumes.etc_zim_volumes = '/example/example.com sdb1 sdb2 sdb3 sdb4\n'
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /usr/sbin/vgscan
     /usr/sbin/pvscan
@@ -528,7 +526,7 @@ And if we look at the state of the setup machine, it's what we expect:
 
     >>> volumes.status()
     vg_sdb /home/databases/example/example.com
-        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
 
 Note that the mount point defaults to the volume path without the past
 path segment.
@@ -537,8 +535,7 @@ If we terminate the machine and start a new machine with the same
 volumes:
 
     >>> volumes.terminate()
-    >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage'])
+    >>> setup_volumes([])
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
@@ -549,29 +546,14 @@ volumes:
 
     >>> volumes.status()
     vg_sdb /home/databases/example/example.com
-        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
 
 Let's try that again, but this time, we'll add some more disks::
 
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 8
-           replicas = 3, 2
-       /volume2 : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-
-       /storage : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/volume 2'
-         sdc = '/example/example.com/volume2 2'
-
-.. -> tree
-
-    >>> zk.import_tree(tree, trim=True)
+    >>> volumes.etc_zim_volumes = '''
+    ... /example/example.com sdb1 sdb2 sdb3 sdb4 sdb5 sdb6 sdb7 sdb8
+    ... /example/other sdc1 sdc2 sdc3 sdc4
+    ... '''
 
 Here, we've added disks to the first volume, and added a second
 volume.
@@ -580,75 +562,9 @@ volume.
     >>> volumes.sds.extend(
     ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
 
-    >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage'])
-    Traceback (most recent call last):
-    ...
-    ValueError: ('Duplicate mount points', u'/example/example.com')
-
-Oops. Remember that by default, the volume path *without* the last
-path segment is the default mount point.  In this case, this leads to
-duplication.  We can provide an explicit path::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 8
-           replicas = 3, 2
-       /volume2 : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-           path = '/example/example.com/volume2'
-
-       /storage : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/volume 2'
-         sdc = '/example/example.com/volume2 2'
-
-.. -> tree
-
     >>> zk.import_tree(tree, trim=True)
 
-But we'll still get an error::
-
-    >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage'])
-    ... # doctest: +NORMALIZE_WHITESPACE
-    Traceback (most recent call last):
-    ...
-    ValueError: ('One mount point is a prefix of another',
-                 u'/example/example.com/', u'/example/example.com/volume2')
-
-Here we failed because our mountpoints overlap. Not good.  Let's try
-again:
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 8
-           replicas = 3, 2
-       /volume2 : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-           path = '/example/other'
-
-       /storage : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/volume 2'
-         sdc = '/example/example.com/volume2 2'
-
-
-.. -> tree
-
-    >>> zk.import_tree(tree, trim=True)
-
-    >>> setup_volumes(['zookeeper.example.com:2181',
-    ...                '/example/example.com/storage'])
-    ... # doctest: +NORMALIZE_WHITESPACE
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
     /usr/sbin/vgscan
@@ -672,7 +588,7 @@ again:
 
     >>> volumes.status()
     vg_sdb /home/databases/example/example.com
-        md0 [u'sdb1', u'sdb2', u'sdb3', u'sdb4']
-        md1 [u'sdb5', u'sdb6', u'sdb7', u'sdb8']
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
+        md1 ['sdb5', 'sdb6', 'sdb7', 'sdb8']
     vg_sdc /home/databases/example/other
-        md2 [u'sdc1', u'sdc2', u'sdc3', u'sdc4']
+        md2 ['sdc1', 'sdc2', 'sdc3', 'sdc4']
