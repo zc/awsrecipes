@@ -484,7 +484,7 @@ Setting up the volumns on the storage servers
 After the storage server is created, and the volumns are attached, we
 need to set up the software raid, the logical volumes, and the mounts.
 
-The setup_volumes scripts does this. It's run on the storage server
+The setup-volumes scripts does this. It's run on the storage server
 when it's created, as part of the user-data script (as shown in the
 previous section). It can also be run later when additional ebs
 volumes are added.
