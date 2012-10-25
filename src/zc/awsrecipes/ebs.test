@@ -45,10 +45,10 @@ Let's set up a sample tree::
     ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
     >>> lebs = pkg_resources.load_entry_point(dist, 'console_scripts', 'lebs')
     >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
-    created /example/example.com/volume 1-1
-    created /example/example.com/volume 1-2
-    created /example/example.com/volume 2-1
-    created /example/example.com/volume 2-2
+    created test_cluster /example/example.com/volume 1-1
+    created test_cluster /example/example.com/volume 1-2
+    created test_cluster /example/example.com/volume 2-1
+    created test_cluster /example/example.com/volume 2-2
 
     >>> import boto.ec2
     >>> conn = boto.ec2.connect_to_region('test_region')
@@ -56,7 +56,7 @@ Let's set up a sample tree::
     ...     print volume
     Volume({'id': 'vol0',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 1-1',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 1-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example.com/volume',
@@ -64,7 +64,7 @@ Let's set up a sample tree::
      'zone': 'us-up-1z'})
     Volume({'id': 'vol1',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 1-2',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 1-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example.com/volume',
@@ -72,7 +72,7 @@ Let's set up a sample tree::
      'zone': 'us-up-1z'})
     Volume({'id': 'vol2',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-1',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example.com/volume',
@@ -80,7 +80,7 @@ Let's set up a sample tree::
      'zone': 'us-up-1z'})
     Volume({'id': 'vol3',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-2',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example.com/volume',
@@ -102,7 +102,7 @@ If we change the size after there are existing volumes, we'll get an error::
     >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
     Traceback (most recent call last):
     ...
-    AssertionError: Existing volumne, /example/example.com/volume 1-1, has size 1
+    AssertionError: Existing volumne, test_cluster /example/example.com/volume 1-1, has size 1
 
 If we increase the number of volumes, or add a replica, additional
 volumes are added as necessary::
@@ -119,16 +119,16 @@ volumes are added as necessary::
     >>> zk.import_tree(tree)
     >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
     ... # doctest: +NORMALIZE_WHITESPACE
-    created /example/example.com/volume 3-1
-    created /example/example.com/volume 3-2
-    created /example/example.com/volume 3-3
-    created /example/example.com/volume 3-4
-    exists /example/example.com/volume 2-1
-    exists /example/example.com/volume 2-2
-    created /example/example.com/volume 2-3
-    created /example/example.com/volume 2-4
-    Unused: ['/example/example.com/volume 1-1',
-             '/example/example.com/volume 1-2']
+    created test_cluster /example/example.com/volume 3-1
+    created test_cluster /example/example.com/volume 3-2
+    created test_cluster /example/example.com/volume 3-3
+    created test_cluster /example/example.com/volume 3-4
+    exists test_cluster /example/example.com/volume 2-1
+    exists test_cluster /example/example.com/volume 2-2
+    created test_cluster /example/example.com/volume 2-3
+    created test_cluster /example/example.com/volume 2-4
+    Unused: ['test_cluster /example/example.com/volume 1-1',
+             'test_cluster /example/example.com/volume 1-2']
 
 Note that we stopped using replica 1.  The corresponding unused
 volumes were noted, but not removed.  We're too cowardly to remove
@@ -195,7 +195,7 @@ And the relevent volumes are attached:
     ...     print volume
     Volume({'id': 'vol0',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 1-1',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 1-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example.com/volume',
@@ -203,7 +203,7 @@ And the relevent volumes are attached:
      'zone': 'us-up-1z'})
     Volume({'id': 'vol1',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 1-2',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 1-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example.com/volume',
@@ -214,7 +214,7 @@ And the relevent volumes are attached:
      'status': 'attached'}),
      'id': 'vol2',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-1',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example.com/volume',
@@ -225,7 +225,7 @@ And the relevent volumes are attached:
      'status': 'attached'}),
      'id': 'vol3',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-2',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example.com/volume',
@@ -233,7 +233,7 @@ And the relevent volumes are attached:
      'zone': 'us-up-1z'})
     Volume({'id': 'vol4',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 3-1',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 3-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example.com/volume',
@@ -241,7 +241,7 @@ And the relevent volumes are attached:
      'zone': 'us-up-1z'})
     Volume({'id': 'vol5',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 3-2',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 3-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example.com/volume',
@@ -249,7 +249,7 @@ And the relevent volumes are attached:
      'zone': 'us-up-1z'})
     Volume({'id': 'vol6',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 3-3',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 3-3',
               'creator': 'testy (Testy Tester)',
               'index': '3',
               'logical': '/example/example.com/volume',
@@ -257,7 +257,7 @@ And the relevent volumes are attached:
      'zone': 'us-up-1z'})
     Volume({'id': 'vol7',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 3-4',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 3-4',
               'creator': 'testy (Testy Tester)',
               'index': '4',
               'logical': '/example/example.com/volume',
@@ -268,7 +268,7 @@ And the relevent volumes are attached:
      'status': 'attached'}),
      'id': 'vol8',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-3',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-3',
               'creator': 'testy (Testy Tester)',
               'index': '3',
               'logical': '/example/example.com/volume',
@@ -279,7 +279,7 @@ And the relevent volumes are attached:
      'status': 'attached'}),
      'id': 'vol9',
      'size': 1,
-     'tags': {'Name': '/example/example.com/volume 2-4',
+     'tags': {'Name': 'test_cluster /example/example.com/volume 2-4',
               'creator': 'testy (Testy Tester)',
               'index': '4',
               'logical': '/example/example.com/volume',
@@ -372,15 +372,15 @@ Let's try multiple volumes:
 Oops, we forgot to create the new volumes:
 
     >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/volume'])
-    created /example/example2.com/volume 2-1
-    created /example/example2.com/volume 2-2
-    created /example/example2.com/volume 2-3
-    created /example/example2.com/volume 2-4
+    created test_cluster /example/example2.com/volume 2-1
+    created test_cluster /example/example2.com/volume 2-2
+    created test_cluster /example/example2.com/volume 2-3
+    created test_cluster /example/example2.com/volume 2-4
     >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/v2'])
-    created /example/example2.com/v2 2-1
-    created /example/example2.com/v2 2-2
-    created /example/example2.com/v2 2-3
-    created /example/example2.com/v2 2-4
+    created test_cluster /example/example2.com/v2 2-1
+    created test_cluster /example/example2.com/v2 2-2
+    created test_cluster /example/example2.com/v2 2-3
+    created test_cluster /example/example2.com/v2 2-4
 
     >>> server(['zookeeper.example.com:2181',
     ...        '/example/example2.com/storage.example2.com'])
@@ -398,7 +398,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol10',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/volume 2-1',
+     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example2.com/volume',
@@ -409,7 +409,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol11',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/volume 2-2',
+     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example2.com/volume',
@@ -420,7 +420,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol12',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/volume 2-3',
+     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-3',
               'creator': 'testy (Testy Tester)',
               'index': '3',
               'logical': '/example/example2.com/volume',
@@ -431,7 +431,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol13',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/volume 2-4',
+     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-4',
               'creator': 'testy (Testy Tester)',
               'index': '4',
               'logical': '/example/example2.com/volume',
@@ -442,7 +442,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol14',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/v2 2-1',
+     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-1',
               'creator': 'testy (Testy Tester)',
               'index': '1',
               'logical': '/example/example2.com/v2',
@@ -453,7 +453,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol15',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/v2 2-2',
+     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-2',
               'creator': 'testy (Testy Tester)',
               'index': '2',
               'logical': '/example/example2.com/v2',
@@ -464,7 +464,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol16',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/v2 2-3',
+     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-3',
               'creator': 'testy (Testy Tester)',
               'index': '3',
               'logical': '/example/example2.com/v2',
@@ -475,7 +475,7 @@ Double check the new attachments.
      'status': 'attached'}),
      'id': 'vol17',
      'size': 1,
-     'tags': {'Name': '/example/example2.com/v2 2-4',
+     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-4',
      ...
 
 Setting up the volumns on the storage servers

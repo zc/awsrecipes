@@ -81,7 +81,7 @@ def lebs(zk, path):
         replicas = (replicas, )
     for replica in replicas:
         for index in range(1, properties['n'] + 1):
-            name = "%s %s-%s" % (path, replica, index)
+            name = "%s %s %s-%s" % (vpc.tags['Name'], path, replica, index)
             needed.add(name)
             if name in existing:
                 print 'exists', name
