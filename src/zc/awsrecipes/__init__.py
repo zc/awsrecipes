@@ -63,6 +63,7 @@ def lebs_main(args=None):
 def lebs(zk, path):
 
     properties, vpc, conn = _zk(zk, path)
+    cluster = vpc.tags['Name']
 
     [subnet] = vpc.connection.get_all_subnets(
         filters={'tag:scope': 'private', 'vpc_id': vpc.id})
@@ -81,7 +82,7 @@ def lebs(zk, path):
         replicas = (replicas, )
     for replica in replicas:
         for index in range(1, properties['n'] + 1):
-            name = "%s %s %s-%s" % (vpc.tags['Name'], path, replica, index)
+            name = "%s %s %s-%s" % (cluster, path, replica, index)
             needed.add(name)
             if name in existing:
                 print 'exists', name
@@ -90,6 +91,7 @@ def lebs(zk, path):
                 conn.create_tags(
                     [vol.id], dict(
                         Name=name,
+                        cluster=cluster,
                         logical=path,
                         replica=str(replica),
                         index=str(index),
@@ -123,6 +125,7 @@ def storage_server(zk, path):
     hostname = path.rsplit('/', 1)[1]
     domain = vpc.tags['Name']+'.aws.zope.net'
     hostname += '.' + domain
+    cluster = vpc.tags['Name']
 
     existing = conn.get_all_instances(filters=tag_filter(Name=hostname))
     assert_(not existing, "%s exists" % hostname)
@@ -145,6 +148,7 @@ def storage_server(zk, path):
         vols = []
         for vol in conn.get_all_volumes(
             filters=tag_filter(
+                cluster=cluster,
                 logical=vpath,
                 replica=replica,
                 )):
