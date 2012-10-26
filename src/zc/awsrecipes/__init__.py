@@ -381,6 +381,8 @@ def setup_volumes():
     for lv in logical_volumes.values():
         lv.setup()
 
+    os.rename('/etc/zim/volumes', '/etc/zim/volumes-setup')
+
 def setup_volumes_main(args=None):
     if args is None:
         args = sys.argv[1:]

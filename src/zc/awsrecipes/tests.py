@@ -192,6 +192,8 @@ class FauxVolumes:
         setupstack.context_manager(
             test, mock.patch('os.path.exists', side_effect=self.exists))
         setupstack.context_manager(
+            test, mock.patch('os.rename', side_effect=self.rename))
+        setupstack.context_manager(
             test, mock.patch('zc.awsrecipes.open', create=True,
                              side_effect=self.open))
 
@@ -218,6 +220,9 @@ class FauxVolumes:
 
     def terminate(self):
         self.init(self.sds, self.mds, self.vgs)
+        if hasattr(self, 'etc_zim_volumes_setup'):
+            self.etc_zim_volumes = self.etc_zim_volumes_setup
+            del self.etc_zim_volumes_setup
 
     def exists(self, name):
         if name.startswith('/dev/'):
@@ -232,6 +237,13 @@ class FauxVolumes:
             return StringIO.StringIO(self.etc_zim_volumes)
         assert_(name=='/proc/mdstat')
         return StringIO.StringIO(self.mdstat())
+
+    def rename(self, src, dest):
+        assert_(src == '/etc/zim/volumes')
+        assert_(dest == '/etc/zim/volumes-setup')
+        self.etc_zim_volumes_setup = self.etc_zim_volumes
+        del self.etc_zim_volumes
+        print 'rename', src, dest
 
     def lvcreate(self, command, p):
         args = command.split()
