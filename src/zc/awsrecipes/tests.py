@@ -270,7 +270,7 @@ def test_suite():
     return unittest.TestSuite((
         manuel.testing.TestSuite(
             manuel.doctest.Manuel() + manuel.capture.Manuel(),
-            'ebs.test',
+            'main.test',
             setUp=setup, tearDown=setupstack.tearDown,
             ),
         ))
