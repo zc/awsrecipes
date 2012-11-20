@@ -1,503 +1,3 @@
-Utility scripts
-===============
-
-lebs
-----
-
-Deploy or update a logical volume defined at a given ZooKeeper path.
-
-Usage: ``lebs ZOO PATH``
-
-where:
-
-ZOO
-  A ZooKeeper connection string.
-
-PATH
-  A path in ZooKeeper where a logical ebs volume is defined.  It must
-  have a type property with the value: ``lebs``
-
-Notes:
-
-- The ZooKeeper tree must have a ``/hosts`` node containing a ``cluster``
-  property naming the VPC/cluster that will be used.
-
-Let's set up a sample tree::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 2
-           replicas = 1, 2
-
-  /hosts
-    cluster = 'test_cluster'
-
-.. -> tree
-
-    >>> import zc.zk
-    >>> zk = zc.zk.ZK('zookeeper.example.com:2181')
-    >>> zk.import_tree(tree)
-
-    >>> import pkg_resources
-    >>> dist = pkg_resources.working_set.find(
-    ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
-    >>> lebs = pkg_resources.load_entry_point(dist, 'console_scripts', 'lebs')
-    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
-    created test_cluster /example/example.com/volume 1-1
-    created test_cluster /example/example.com/volume 1-2
-    created test_cluster /example/example.com/volume 2-1
-    created test_cluster /example/example.com/volume 2-2
-
-    >>> import boto.ec2
-    >>> conn = boto.ec2.connect_to_region('test_region')
-    >>> for volume in conn.volumes:
-    ...     print volume
-    Volume({'id': 'vol0',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 1-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example.com/volume',
-              'replica': '1'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol1',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 1-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example.com/volume',
-              'replica': '1'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol2',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol3',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-
-If we change the size after there are existing volumes, we'll get an error::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 2
-           n = 2
-           replicas = 1, 2
-
-.. -> tree
-
-    >>> zk.import_tree(tree)
-    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
-    Traceback (most recent call last):
-    ...
-    AssertionError: Existing volumne, test_cluster /example/example.com/volume 1-1, has size 1
-
-If we increase the number of volumes, or add a replica, additional
-volumes are added as necessary::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-
-.. -> tree
-
-    >>> zk.import_tree(tree)
-    >>> lebs(['zookeeper.example.com:2181', '/example/example.com/volume'])
-    ... # doctest: +NORMALIZE_WHITESPACE
-    created test_cluster /example/example.com/volume 3-1
-    created test_cluster /example/example.com/volume 3-2
-    created test_cluster /example/example.com/volume 3-3
-    created test_cluster /example/example.com/volume 3-4
-    exists test_cluster /example/example.com/volume 2-1
-    exists test_cluster /example/example.com/volume 2-2
-    created test_cluster /example/example.com/volume 2-3
-    created test_cluster /example/example.com/volume 2-4
-    Unused: ['test_cluster /example/example.com/volume 1-1',
-             'test_cluster /example/example.com/volume 1-2']
-
-Note that we stopped using replica 1.  The corresponding unused
-volumes were noted, but not removed.  We're too cowardly to remove
-disk volumes.
-
-Once the volumes have been created, we're ready to set up storage
-servers.  We'll start with one::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-
-       /storage : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/volume 2'
-
-.. -> tree
-
-    >>> zk.import_tree(tree)
-
-To add a server, we'll use the storage-server command:
-
-    >>> server = pkg_resources.load_entry_point(
-    ...     dist, 'console_scripts', 'storage-server')
-
-
-    >>> server(['zookeeper.example.com:2181',
-    ...        '/example/example.com/storage'])
-
-
-At this point, we have a storage server:
-
-    >>> for instance in conn.instances:
-    ...     print '==='
-    ...     print instance
-    ...     print '---'
-    ...     print instance.attrs['userData']
-    ...     print '==='
-    ... # doctest: +ELLIPSIS
-    ===
-    Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
-     'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
-     'tags': {},
-     'vpc_id': 'vpc1'})],
-               'userData': ...
-     'id': 'inst0',
-     'tags': {'Name': 'storage.test_cluster.aws.zope.net',
-              'creator': 'testy (Testy Tester)'}})
-    ---
-    #!/bin/sh
-    echo 'example,storage' > /etc/zim/role
-    hostname storage.test_cluster.aws.zope.net
-    echo '/example/example.com sdb1 sdb2 sdb3 sdb4
-    ' > /etc/zim/volumes
-    <BLANKLINE>
-    ===
-
-And the relevent volumes are attached:
-
-    >>> for volume in conn.volumes:
-    ...     print volume
-    Volume({'id': 'vol0',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 1-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example.com/volume',
-              'replica': '1'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol1',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 1-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example.com/volume',
-              'replica': '1'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb1',
-     'instance_id': 'inst0',
-     'status': 'attached'}),
-     'id': 'vol2',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb2',
-     'instance_id': 'inst0',
-     'status': 'attached'}),
-     'id': 'vol3',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol4',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 3-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example.com/volume',
-              'replica': '3'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol5',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 3-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example.com/volume',
-              'replica': '3'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol6',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 3-3',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '3',
-              'logical': '/example/example.com/volume',
-              'replica': '3'},
-     'zone': 'us-up-1z'})
-    Volume({'id': 'vol7',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 3-4',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '4',
-              'logical': '/example/example.com/volume',
-              'replica': '3'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb3',
-     'instance_id': 'inst0',
-     'status': 'attached'}),
-     'id': 'vol8',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-3',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '3',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb4',
-     'instance_id': 'inst0',
-     'status': 'attached'}),
-     'id': 'vol9',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example.com/volume 2-4',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '4',
-              'logical': '/example/example.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-
-
-If you get a volume path wrong in a storage-server definition, the
-server won't be created:
-
-::
-
-  /example
-    /example.com
-       /volume : lebs
-           size = 1
-           n = 4
-           replicas = 3, 2
-
-       /storage : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/volume 2'
-       /storage2.example.com : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example.com/database 2'
-
-.. -> tree
-
-    >>> zk.import_tree(tree)
-    >>> server(['zookeeper.example.com:2181',
-    ...        '/example/example.com/storage2.example.com'])
-    Traceback (most recent call last):
-    ...
-    NoNodeException: /example/example.com/database
-
-    >>> for instance in conn.instances:
-    ...     print '==='
-    ...     print instance
-    ...     print '---'
-    ...     print instance.attrs['userData']
-    ...     print '==='
-    ... # doctest: +ELLIPSIS
-    ===
-    Instance({'attrs': {'groupSet': [Resource({'id': 'gr1',
-     'name': 'two-VPCSecurityGroup-QHALEVN2EWCD',
-     'tags': {},
-     'vpc_id': 'vpc1'})],
-               'userData': ...
-     'id': 'inst0',
-     'tags': {'Name': 'storage.test_cluster.aws.zope.net',
-              'creator': 'testy (Testy Tester)'}})
-    ---
-    #!/bin/sh
-    echo 'example,storage' > /etc/zim/role
-    hostname storage.test_cluster.aws.zope.net
-    echo '/example/example.com sdb1 sdb2 sdb3 sdb4
-    ' > /etc/zim/volumes
-    <BLANKLINE>
-    ===
-
-Let's try multiple volumes:
-
-  /example
-    /example2.com
-       /volume : lebs
-           size = 1
-           n = 4
-           replicas = 2
-       /v2 : lebs
-           size = 1
-           n = 4
-           replicas = 2
-
-       /storage.example2.com : storage-server
-         instance-type = 'm1.large'
-         sdb = '/example/example2.com/volume 2'
-         sdc = '/example/example2.com/v2 2'
-
-.. -> tree
-
-    >>> zk.import_tree(tree)
-    extra path not trimmed: /example/example.com
-
-    >>> server(['zookeeper.example.com:2181',
-    ...        '/example/example2.com/storage.example2.com'])
-    Traceback (most recent call last):
-    ...
-    AssertionError: ('Missing volumes', u'/example/example2.com/volume', 4, [])
-
-Oops, we forgot to create the new volumes:
-
-    >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/volume'])
-    created test_cluster /example/example2.com/volume 2-1
-    created test_cluster /example/example2.com/volume 2-2
-    created test_cluster /example/example2.com/volume 2-3
-    created test_cluster /example/example2.com/volume 2-4
-    >>> lebs(['zookeeper.example.com:2181', '/example/example2.com/v2'])
-    created test_cluster /example/example2.com/v2 2-1
-    created test_cluster /example/example2.com/v2 2-2
-    created test_cluster /example/example2.com/v2 2-3
-    created test_cluster /example/example2.com/v2 2-4
-
-    >>> server(['zookeeper.example.com:2181',
-    ...        '/example/example2.com/storage.example2.com'])
-
-
-Double check the new attachments.
-
-    >>> for volume in conn.volumes:
-    ...     print volume
-    ... # doctest: +ELLIPSIS
-    Volume({'id': 'vol0',
-    ...
-    Volume({'attach_data': AttachmentSet({'device': u'sdb1',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol10',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example2.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb2',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol11',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example2.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb3',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol12',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-3',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '3',
-              'logical': '/example/example2.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdb4',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol13',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/volume 2-4',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '4',
-              'logical': '/example/example2.com/volume',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdc1',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol14',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-1',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '1',
-              'logical': '/example/example2.com/v2',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdc2',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol15',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-2',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '2',
-              'logical': '/example/example2.com/v2',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdc3',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol16',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-3',
-              'cluster': 'test_cluster',
-              'creator': 'testy (Testy Tester)',
-              'index': '3',
-              'logical': '/example/example2.com/v2',
-              'replica': '2'},
-     'zone': 'us-up-1z'})
-    Volume({'attach_data': AttachmentSet({'device': u'sdc4',
-     'instance_id': 'inst1',
-     'status': 'attached'}),
-     'id': 'vol17',
-     'size': 1,
-     'tags': {'Name': 'test_cluster /example/example2.com/v2 2-4',
-     ...
 
 Setting up the volumns on the storage servers
 =============================================
@@ -518,7 +18,9 @@ be in the volume.  It does this by:
 - Scanning LVM data and adding new raid volumes to logical volumes, as
   necessary.
 
-
+    >>> import pkg_resources
+    >>> dist = pkg_resources.working_set.find(
+    ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
     >>> setup_volumes = pkg_resources.load_entry_point(
     ...     dist, 'console_scripts', 'setup-volumes')
 
@@ -540,13 +42,13 @@ Now, we'll call setup_volumes:
     /usr/sbin/vgcreate vg_sdb /dev/md0
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
     /sbin/mkfs -t ext3 /dev/vg_sdb/data
-    /bin/mkdir -p /home/databases/example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
 
 And if we look at the state of the setup machine, it's what we expect:
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com
+    vg_sdb /example/example.com
         md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
 
 Note that the mount point defaults to the volume path without the past
@@ -562,11 +64,11 @@ volumes:
     /usr/sbin/vgscan
     /sbin/vgchange -a y vg_sdb
     /usr/sbin/pvscan
-    /bin/mkdir -p /home/databases/example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com
+    vg_sdb /example/example.com
         md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
 
 Let's try that again, but this time, we'll add some more disks::
@@ -583,8 +85,6 @@ volume.
     >>> volumes.sds.extend(
     ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
 
-    >>> zk.import_tree(tree, trim=True)
-
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
@@ -597,19 +97,19 @@ volume.
     /usr/sbin/vgextend vg_sdb /dev/md1
     /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
     /sbin/resize2fs /dev/vg_sdb/data
-    /bin/mkdir -p /home/databases/example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /home/databases/example/example.com
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
     /sbin/mdadm --create --metadata 1.2 -l10 -n4
          /dev/md2 /dev/sdc1 /dev/sdc2 /dev/sdc3 /dev/sdc4
     /usr/sbin/vgcreate vg_sdc /dev/md2
     /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
     /sbin/mkfs -t ext3 /dev/vg_sdc/data
-    /bin/mkdir -p /home/databases/example/other
-    /bin/mount -t ext3 /dev/vg_sdc/data /home/databases/example/other
+    /bin/mkdir -p /example/other
+    /bin/mount -t ext3 /dev/vg_sdc/data /example/other
 
     >>> volumes.status()
-    vg_sdb /home/databases/example/example.com
+    vg_sdb /example/example.com
         md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
         md1 ['sdb5', 'sdb6', 'sdb7', 'sdb8']
-    vg_sdc /home/databases/example/other
+    vg_sdc /example/other
         md2 ['sdc1', 'sdc2', 'sdc3', 'sdc4']
