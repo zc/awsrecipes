@@ -1,4 +1,4 @@
-'
+
 Setting up the volumns on the storage servers
 =============================================
 
@@ -75,6 +75,7 @@ volumes:
 
 Let's try that again, but this time, we'll add some more disks::
 
+    >>> volumes.terminate()
     >>> volumes.etc_zim_volumes = '''
     ... /example/example.com sdb1 sdb2 sdb3 sdb4 sdb5 sdb6 sdb7 sdb8
     ... /example/other sdc1 sdc2 sdc3 sdc4
@@ -83,7 +84,6 @@ Let's try that again, but this time, we'll add some more disks::
 Here, we've added disks to the first volume, and added a second
 volume.
 
-    >>> volumes.terminate()
     >>> volumes.sds.extend(
     ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
 
@@ -110,7 +110,7 @@ volume.
     /bin/mount -t ext3 /dev/vg_sdc/data /example/other
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
-    >>> volumes.status() # doctest: +NORMALIZE_WHITESPACE
+    >>> volumes.status()
     vg_sdb /example/example.com
         md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
         md1 ['sdb5', 'sdb6', 'sdb7', 'sdb8']

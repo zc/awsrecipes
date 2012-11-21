@@ -13,21 +13,11 @@
 ##############################################################################
 name, version = 'zc.awsrecipes', '0'
 
-install_requires = ['setuptools', 'boto', 'zc.zk [static]', 'zc.metarecipe']
+install_requires = ['setuptools']
 extras_require = dict(test=['zope.testing', 'mock', 'manuel'])
 
 entry_points = """
-[zc.buildout]
-ebs = zc.awsrecipes:EBS
-ec2 = zc.awsrecipes:EC2
-
-[zc.buildout.uninstall]
-ec2 = zc.awsrecipes:uninstall_ec2_instance
-
-
 [console_scripts]
-lebs = zc.awsrecipes:lebs_main
-storage-server = zc.awsrecipes:storage_server_main
 setup-volumes = zc.awsrecipes:setup_volumes_main
 """
 
