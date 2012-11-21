@@ -1,0 +1,118 @@
+'
+Setting up the volumns on the storage servers
+=============================================
+
+After the storage server is created, and the volumns are attached, we
+need to set up the software raid, the logical volumes, and the mounts.
+
+The setup-volumes scripts does this. It's run on the storage server
+when it's created. It can also be run later when additional ebs
+volumes are added.
+
+The script has to be careful to preserve any data that might already
+be in the volume.  It does this by:
+
+- Scanning the software raid and adding new raid volumes when it sees
+  unconfigured ebs volumes and
+
+- Scanning LVM data and adding new raid volumes to logical volumes, as
+  necessary.
+
+    >>> import pkg_resources
+    >>> dist = pkg_resources.working_set.find(
+    ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
+    >>> setup_volumes = pkg_resources.load_entry_point(
+    ...     dist, 'console_scripts', 'setup-volumes')
+
+Let's start with new ebs volumes.  For testing, we have a simulated
+machine that we can initialize to similate a system and ebs volumes.
+We'll start with 4 clean new ebs volumes as defined in the tree model:
+
+    >>> volumes.init(['sdb1', 'sdb2', 'sdb3', 'sdb4'])
+
+Now, we'll call setup_volumes:
+
+    >>> volumes.etc_zim_volumes = '/example/example.com sdb1 sdb2 sdb3 sdb4\n'
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /usr/sbin/vgscan
+    /usr/sbin/pvscan
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+       /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
+    /usr/sbin/vgcreate vg_sdb /dev/md0
+    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
+    /sbin/mkfs -t ext3 /dev/vg_sdb/data
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    rename /etc/zim/volumes /etc/zim/volumes-setup
+
+And if we look at the state of the setup machine, it's what we expect:
+
+    >>> volumes.status()
+    vg_sdb /example/example.com
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
+
+Note that the mount point defaults to the volume path without the past
+path segment.
+
+If we terminate the machine and start a new machine with the same
+volumes:
+
+    >>> volumes.terminate()
+    >>> setup_volumes([])
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /sbin/mdadm -A --scan
+    /usr/sbin/vgscan
+    /sbin/vgchange -a y vg_sdb
+    /usr/sbin/pvscan
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    rename /etc/zim/volumes /etc/zim/volumes-setup
+
+    >>> volumes.status()
+    vg_sdb /example/example.com
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
+
+Let's try that again, but this time, we'll add some more disks::
+
+    >>> volumes.etc_zim_volumes = '''
+    ... /example/example.com sdb1 sdb2 sdb3 sdb4 sdb5 sdb6 sdb7 sdb8
+    ... /example/other sdc1 sdc2 sdc3 sdc4
+    ... '''
+
+Here, we've added disks to the first volume, and added a second
+volume.
+
+    >>> volumes.terminate()
+    >>> volumes.sds.extend(
+    ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
+
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /sbin/mdadm -A --scan
+    /usr/sbin/vgscan
+    /sbin/vgchange -a y vg_sdb
+    /usr/sbin/pvscan
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+       /dev/md1 /dev/sdb5 /dev/sdb6 /dev/sdb7 /dev/sdb8
+    /usr/sbin/pvcreate /dev/md1
+    /usr/sbin/vgextend vg_sdb /dev/md1
+    /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
+    /sbin/resize2fs /dev/vg_sdb/data
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+         /dev/md2 /dev/sdc1 /dev/sdc2 /dev/sdc3 /dev/sdc4
+    /usr/sbin/vgcreate vg_sdc /dev/md2
+    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
+    /sbin/mkfs -t ext3 /dev/vg_sdc/data
+    /bin/mkdir -p /example/other
+    /bin/mount -t ext3 /dev/vg_sdc/data /example/other
+    rename /etc/zim/volumes /etc/zim/volumes-setup
+
+    >>> volumes.status() # doctest: +NORMALIZE_WHITESPACE
+    vg_sdb /example/example.com
+        md0 ['sdb1', 'sdb2', 'sdb3', 'sdb4']
+        md1 ['sdb5', 'sdb6', 'sdb7', 'sdb8']
+    vg_sdc /example/other
+        md2 ['sdc1', 'sdc2', 'sdc3', 'sdc4']
