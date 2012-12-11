@@ -25,7 +25,7 @@ be in the volume.  It does this by:
     ...     dist, 'console_scripts', 'setup-volumes')
 
 Let's start with new ebs volumes.  For testing, we have a simulated
-machine that we can initialize to similate a system and ebs volumes.
+machine that we can initialize to simulate a system and ebs volumes.
 We'll start with 4 clean new ebs volumes as defined in the tree model:
 
     >>> volumes.init(['sdb1', 'sdb2', 'sdb3', 'sdb4'])
