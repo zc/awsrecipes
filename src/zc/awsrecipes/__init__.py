@@ -5,10 +5,13 @@ import sys
 import tempfile
 import time
 
-def s(command):
+def s(command, should_raise=True):
     print command
     if subprocess.call(command, shell=True):
-        raise SystemError(command)
+        if should_raise:
+            raise SystemError(command)
+        return False
+    return True
 
 def p(command):
     print command
@@ -73,18 +76,29 @@ class LogicalVolume:
         s('/bin/mkdir -p %s' % path)
         s('/bin/mount -t ext3 /dev/vg_%s/data %s' % (self.name, path))
 
+def single(mount_point, device):
+    if not os.path.exists(mount_point):
+        s('/bin/mkdir -p %s' % mount_point)
+    wait_for_device(device)
+    if not s("/bin/mount -t ext3 %s %s" % (device, mount_point),
+             should_raise=False):
+        s("/sbin/mkfs.ext3 -F "+device)
+        s("/bin/mount -t ext3 %s %s" % (device, mount_point))
+
+def ln(mount_point, src):
+    if not os.path.exists(os.path.dirname(mount_point)):
+        s('/bin/mkdir -p %s' % os.path.dirname(mount_point))
+    if not os.path.exists(src):
+        s('/bin/mkdir -p %s' % src)
+    s("/bin/ln -s %s %s" % (src, mount_point))
+
+def wait_for_device(path):
+    while not os.path.exists(path):
+        time.sleep(1)
 
 def setup_volumes():
     """Set up md (raid) and lvm modules on a new machine
     """
-
-    # The volumes may have been set up before on a previos machine.
-    # Scan for them:
-    s('/sbin/mdadm --examine --scan >>/etc/mdadm.conf')
-    f = open('/etc/mdadm.conf')
-    if f.read().strip():
-        s('/sbin/mdadm -A --scan')
-    f.close()
 
     # Get what we want from the ZK tree
     logical_volumes = {}
@@ -96,19 +110,37 @@ def setup_volumes():
             continue
         sdvols = line.split()
         mount_point = sdvols.pop(0)
+        if len(sdvols) == 1:
+            dev = sdvols[0]
+            if dev[0] == '/':
+                ln(mount_point, dev)
+            else:
+                single(mount_point, '/dev/'+dev)
+            continue
+
+        # RAID10:
         assert len(set(sdvol[:3] for sdvol in sdvols)) == 1, (
             "Multiple device prefixes")
         sdprefix = sdvols[0][:3]
-        logical_volumes[sdprefix] = LogicalVolume(sdprefix, sdvols, mount_point)
+        logical_volumes[sdprefix] = LogicalVolume(
+            sdprefix, sdvols, mount_point)
         expected_sdvols.update(sdvols)
 
+    if not logical_volumes:
+        return
 
     # Wait for all of our expected sd volumes to appear. (They may be
     # attaching.)
     for v in expected_sdvols:
-        v = '/dev/' + v
-        while not os.path.exists(v):
-            time.sleep(1)
+        wait_for_device('/dev/' + v)
+
+    # The volumes may have been set up before on a previous machine.
+    # Scan for them:
+    s('/sbin/mdadm --examine --scan >>/etc/mdadm.conf')
+    f = open('/etc/mdadm.conf')
+    if f.read().strip():
+        s('/sbin/mdadm -A --scan')
+    f.close()
 
     # Read /proc/mdstat to find out about existing raid volumes:
     mdstat = re.compile(r'md(\w+) : (\w+) (\w+) (.+)$').match
