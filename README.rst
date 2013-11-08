@@ -8,5 +8,8 @@ cloudformation, which is slightly less terrifying, instead.
 Changes
 =======
 
+0.3.0 2013-11-08
+----------------
+
 Added support for single non-RAID10 volumes and symbolic links.
 
