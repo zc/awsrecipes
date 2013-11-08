@@ -3,11 +3,20 @@ Setting up the volumns on the storage servers
 =============================================
 
 After the storage server is created, and the volumns are attached, we
-need to set up the software raid, the logical volumes, and the mounts.
+need to set up and mount the volumes.
 
 The setup-volumes scripts does this. It's run on the storage server
 when it's created. It can also be run later when additional ebs
 volumes are added.
+
+There are 2 modes:
+
+- RAID10
+
+- Single-volume
+
+RAID10
+------
 
 The script has to be careful to preserve any data that might already
 be in the volume.  It does this by:
@@ -19,10 +28,8 @@ be in the volume.  It does this by:
   necessary.
 
     >>> import pkg_resources
-    >>> dist = pkg_resources.working_set.find(
-    ...     pkg_resources.Requirement.parse('zc.awsrecipes'))
     >>> setup_volumes = pkg_resources.load_entry_point(
-    ...     dist, 'console_scripts', 'setup-volumes')
+    ...     'zc.awsrecipes', 'console_scripts', 'setup-volumes')
 
 Let's start with new ebs volumes.  For testing, we have a simulated
 machine that we can initialize to simulate a system and ebs volumes.
@@ -116,3 +123,94 @@ volume.
         md1 ['sdb5', 'sdb6', 'sdb7', 'sdb8']
     vg_sdc /example/other
         md2 ['sdc1', 'sdc2', 'sdc3', 'sdc4']
+
+Single-volume
+-------------
+
+Sometimes, rather than RAID10, we use a single-volume partition.
+Doing so allows us to take EBS snapshots while the volume is use and
+doesn't require us to double the allocated storage.
+
+The script has to be careful to preserve any data that might already
+be in the volume.  It does this by first trying to mount the volume.
+If the mount succeeds, it's done. Otherwise, it formats the volume and
+them mounts it.
+
+    >>> volumes.init(['sdb1'])
+    >>> volumes.etc_zim_volumes = '/example/example.com sdb1\n'
+
+Here, we have a single volume in the volume configuration.  This
+indcates that we don't want RAID10.
+
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/sdb1 /example/example.com
+    AssertionError: no file system
+    /sbin/mkfs.ext3 -F /dev/sdb1
+    /bin/mount -t ext3 /dev/sdb1 /example/example.com
+
+Symbolic links
+--------------
+
+Sometimes, we want to add a link from one file-system to another. For
+example, we typically want the databases in /home/databases, but we
+may want to store data in ephemeral storage.  We can cause a link to
+be created before databases are installed:
+
+    >>> volumes.init()
+    >>> volumes.etc_zim_volumes = '/home/database /mnt/ephemeral0/databases\n'
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /bin/mkdir -p /mnt/ephemeral0/databases
+    /bin/ln -s /mnt/ephemeral0/databases /home/database
+
+Here, we had ro create the create the source directory.  The target
+will also be created, if necessary:
+
+
+    >>> volumes.init()
+    >>> volumes.etc_zim_volumes = \
+    ...     '/home/database/cust /mnt/ephemeral0/cust\n'
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /bin/mkdir -p /home/database
+    /bin/mkdir -p /mnt/ephemeral0/cust
+    /bin/ln -s /mnt/ephemeral0/cust /home/database/cust
+
+Putting many things together
+----------------------------
+
+In the exampls we've shown, we only defined one volume, but we can
+define many:
+
+    >>> volumes.init(['sdb1', 'sdb2', 'sdb3', 'sdb4', 'sdf1', 'sdf3'])
+    >>> volumes.etc_zim_volumes = '''
+    ... /example/example.com sdb1 sdb2 sdb3 sdb4
+    ... /home/databases/cust1 sdf1
+    ... /home/databases/cust2 /mnt/ephemeral0/cust2
+    ... /home/databases/cust3 sdf3
+    ... '''
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /bin/mkdir -p /home/databases/cust1
+    /bin/mount -t ext3 /dev/sdf1 /home/databases/cust1
+    AssertionError: no file system
+    /sbin/mkfs.ext3 -F /dev/sdf1
+    /bin/mount -t ext3 /dev/sdf1 /home/databases/cust1
+    /bin/mkdir -p /mnt/ephemeral0/cust2
+    /bin/ln -s /mnt/ephemeral0/cust2 /home/databases/cust2
+    /bin/mkdir -p /home/databases/cust3
+    /bin/mount -t ext3 /dev/sdf3 /home/databases/cust3
+    AssertionError: no file system
+    /sbin/mkfs.ext3 -F /dev/sdf3
+    /bin/mount -t ext3 /dev/sdf3 /home/databases/cust3
+    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    /usr/sbin/vgscan
+    /usr/sbin/pvscan
+    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+        /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
+    /usr/sbin/vgcreate vg_sdb /dev/md0
+    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
+    /sbin/mkfs -t ext3 /dev/vg_sdb/data
+    /bin/mkdir -p /example/example.com
+    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    rename /etc/zim/volumes /etc/zim/volumes-setup
+
+

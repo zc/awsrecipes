@@ -44,7 +44,11 @@ class FauxPopen:
             stderr = sys.stdout
         self.stdout = stdout
         self.stderr = stderr
-        self.returncode = handler(command, self) or 0
+        try:
+            self.returncode = handler(command, self) or 0
+        except AssertionError, e:
+            print 'AssertionError:', e
+            self.returncode = -1
 
     def wait(self):
         return self.returncode
@@ -64,7 +68,8 @@ class FauxVolumes:
 
         def Popen(command, stdout=None, stderr=None, shell=False):
             assert_(shell)
-            meth = getattr(self, command.split()[0].rsplit('/', 1)[1])
+            meth = command.split()[0].rsplit('/', 1)[1].replace('.', '_')
+            meth = getattr(self, meth)
             return FauxPopen(meth, command, stdout, stderr)
         setupstack.context_manager(
             test, mock.patch('subprocess.Popen', side_effect=Popen))
@@ -93,6 +98,8 @@ class FauxVolumes:
         if name.startswith('/dev/'):
             name = name[5:]
             return name in self.sds or name in self.mds
+        if [d for d in self.dirs if d.startswith(name+'/')]:
+            return True
         return exists_original(name)
 
     def open(self, name):
@@ -109,6 +116,12 @@ class FauxVolumes:
         self.etc_zim_volumes_setup = self.etc_zim_volumes
         del self.etc_zim_volumes
         print 'rename', src, dest
+
+    def ln(self, command, p):
+        args = command.split()
+        assert_(args[1] == '-s')
+        src, dest = args[2:]
+        # give up. doctest handles other assertions :)
 
     def lvcreate(self, command, p):
         args = command.split()
@@ -179,14 +192,24 @@ class FauxVolumes:
         assert_(vg not in self.fss)
         self.fss[vg] = self.lvs[vg][:]
 
+    def mkfs_ext3(self, command, p):
+        force, dev = command.split()[1:]
+        assert_(force == '-F')
+        assert_(dev.startswith('/dev/'))
+        dev = dev[5:]
+        assert_(dev in self.sds)
+        assert_(dev not in self.fss)
+        self.fss[dev] = dev
+
     def mount(self, command, p):
         args = command.split()
         assert_(args[1:3] == '-t ext3'.split())
         [lv, mp] = args[3:]
         assert_(lv.startswith('/dev/'))
-        assert_(lv.endswith('/data'))
-        vg = lv[5:-5]
-        assert_(vg in self.fss)
+        vg = lv[5:]
+        if lv.endswith('/data'):
+            vg = vg[:-5]
+        assert_(vg in self.fss, "no file system")
         assert_(mp in self.dirs)
         assert_(mp not in self.mounts)
         self.mounts[mp] = vg

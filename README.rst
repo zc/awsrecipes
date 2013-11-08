@@ -5,3 +5,8 @@ This was originally going to be a project that provided buildout
 recipes for managing aws resources, but we ended up using
 cloudformation, which is slightly less terrifying, instead.
 
+Changes
+=======
+
+Added support for single non-RAID10 volumes and symbolic links.
+
