@@ -12,7 +12,7 @@ def s(command):
 
 def p(command):
     print command
-    f = tempfile.TemporaryFile('awsrecipes')
+    f = tempfile.TemporaryFile(prefix='awsrecipes')
     if subprocess.call(command, stdout=f, stderr=subprocess.STDOUT, shell=True):
         raise SystemError(command)
     f.seek(0)
