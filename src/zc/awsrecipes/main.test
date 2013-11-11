@@ -148,6 +148,7 @@ indcates that we don't want RAID10.
     AssertionError: no file system
     /sbin/mkfs.ext3 -F /dev/sdb1
     /bin/mount -t ext3 /dev/sdb1 /example/example.com
+    rename /etc/zim/volumes /etc/zim/volumes-setup
 
 Symbolic links
 --------------
@@ -162,6 +163,7 @@ be created before databases are installed:
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /bin/mkdir -p /mnt/ephemeral0/databases
     /bin/ln -s /mnt/ephemeral0/databases /home/database
+    rename /etc/zim/volumes /etc/zim/volumes-setup
 
 Here, we had ro create the create the source directory.  The target
 will also be created, if necessary:
@@ -174,6 +176,7 @@ will also be created, if necessary:
     /bin/mkdir -p /home/database
     /bin/mkdir -p /mnt/ephemeral0/cust
     /bin/ln -s /mnt/ephemeral0/cust /home/database/cust
+    rename /etc/zim/volumes /etc/zim/volumes-setup
 
 Putting many things together
 ----------------------------

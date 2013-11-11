@@ -8,6 +8,11 @@ cloudformation, which is slightly less terrifying, instead.
 Changes
 =======
 
+0.3.1 2013-11-11
+----------------
+
+Fixed: when not doing RAID, /etc/zim/volumes didn't get renamed.
+
 0.3.0 2013-11-08
 ----------------
 
