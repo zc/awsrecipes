@@ -85,6 +85,33 @@ def single(mount_point, device):
         s("/sbin/mkfs.ext3 -F "+device)
         s("/bin/mount -t ext3 %s %s" % (device, mount_point))
 
+lvname = re.compile(r"\w+/\w+$").match
+def lvm(mount_point, sdvols):
+    # Make a non-raid logical volume
+    if not os.path.exists(mount_point):
+        s('/bin/mkdir -p %s' % mount_point)
+    vg, v = sdvols.pop(0).split('/')
+    sdvols = ["/dev/"+pvol for pvol in sdvols]
+    make_sure_physical_volumes_dont_exist(sdvols)
+    for pvol in sdvols:
+        s("/usr/sbin/pvcreate "+pvol)
+    s("/usr/sbin/vgcreate %s %s" % (vg, " ".join(sdvols)))
+    s("/usr/sbin/lvcreate -l +100%%FREE -n %s %s" % (v, vg))
+    s("/sbin/mkfs -t ext3 /dev/%s/%s" % (vg, v))
+    s("/bin/mount -t ext3 /dev/%s/%s %s" % (vg, v, mount_point))
+
+def make_sure_physical_volumes_dont_exist(vols):
+    for v in vols:
+        wait_for_device(v)
+    for line in p("/usr/sbin/pvscan"):
+        line = line.strip()
+        if not line:
+            continue
+        line = line.split()
+        if line[0] == 'PV':
+            if line[1] in vols:
+                raise ValueError(line[1], "already in use")
+
 def ln(mount_point, src):
     if not os.path.exists(os.path.dirname(mount_point)):
         s('/bin/mkdir -p %s' % os.path.dirname(mount_point))
@@ -117,6 +144,14 @@ def setup_volumes():
             else:
                 single(mount_point, '/dev/'+dev)
             continue
+
+        if len(sdvols) < 1:
+            raise ValueError(line)
+
+        if lvname(sdvols[0]):
+            lvm(mount_point, sdvols)
+            continue
+
 
         # RAID10:
         assert len(set(sdvol[:3] for sdvol in sdvols)) == 1, (
