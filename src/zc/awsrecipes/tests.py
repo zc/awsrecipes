@@ -127,9 +127,8 @@ class FauxVolumes:
         args = command.split()
         assert_(args[1:5] == '-l +100%FREE -n data'.split())
         [vg] = args[5:]
-        [md] = self.vgs[vg]
         assert_(vg not in self.lvs)
-        self.lvs[vg] = [md]
+        self.lvs[vg] = self.vgs[vg]
 
     def lvextend(self, command, p):
         args = command.split()
@@ -194,7 +193,7 @@ class FauxVolumes:
 
     def mkfs_ext3(self, command, p):
         force, dev = command.split()[1:]
-        assert_(force == '-F')
+        assert_(force == '-F', "bad force")
         assert_(dev.startswith('/dev/'))
         dev = dev[5:]
         assert_(dev in self.sds)
@@ -210,8 +209,8 @@ class FauxVolumes:
         if lv.endswith('/data'):
             vg = vg[:-5]
         assert_(vg in self.fss, "no file system")
-        assert_(mp in self.dirs)
-        assert_(mp not in self.mounts)
+        assert_(mp in self.dirs, "dirs")
+        assert_(mp not in self.mounts, "mounts")
         self.mounts[mp] = vg
 
     def pvcreate(self, command, p):
@@ -219,7 +218,7 @@ class FauxVolumes:
         [vol] = args[1:]
         assert_(vol.startswith('/dev/'))
         vol = vol[5:]
-        assert_(vol in self.mds and vol not in self.pvs)
+        assert_((vol in self.mds or vol in self.sds) and vol not in self.pvs)
         self.pvs.add(vol)
 
     def pvscan(self, command, p):
@@ -261,15 +260,18 @@ class FauxVolumes:
         self.fss[vg] = self.vgs[vg][:]
 
     def vgcreate(self, command, p):
-        args = command.split()
-        vg, md = args[1:]
-        assert_(md.startswith('/dev/'))
-        md = md[5:]
-        assert_(vg not in self.vgs)
-        assert_((md in self.mds) and
-                not [vg_ for vg_ in self.vgs if md in self.vgs[vg_]])
-        self.vgs[vg] = [md]
-        self.pvs.add(md)
+        args = command.split()[1:]
+        vg = args.pop(0)
+        vols = args
+        assert_(not [v for v in vols if not v.startswith('/dev/')],
+                "starts w /dev/ %r" % vols)
+        vols = [v[5:] for v in vols]
+        assert_(not [v for v in vols if not (
+            (v in self.pvs or v in self.mds) and
+            not [vg_ for vg_ in self.vgs if v in self.vgs[vg_]]
+            )], "invalid volume")
+        self.vgs[vg] = vols
+        self.pvs.update(vols)
 
     def vgextend(self, command, p):
         args = command.split()

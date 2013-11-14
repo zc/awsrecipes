@@ -40,7 +40,9 @@ We'll start with 4 clean new ebs volumes as defined in the tree model:
 Now, we'll call setup_volumes:
 
     >>> volumes.etc_zim_volumes = '/example/example.com sdb1 sdb2 sdb3 sdb4\n'
-    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    >>> try: setup_volumes([])
+    ... except Exception, v: print v
+    ... # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /usr/sbin/vgscan
     /usr/sbin/pvscan
@@ -149,6 +151,37 @@ indcates that we don't want RAID10.
     /sbin/mkfs.ext3 -F /dev/sdb1
     /bin/mount -t ext3 /dev/sdb1 /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
+
+LVM
+---
+
+You might want to knit multiple volumes together using LVM.
+
+    >>> volumes.init(['sdc', 'sdd'])
+    >>> volumes.etc_zim_volumes = (
+    ...     '/example/example.com eph/data sdc sdd\n')
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    /bin/mkdir -p /example/example.com
+    /usr/sbin/pvscan
+    /usr/sbin/pvcreate /dev/sdc
+    /usr/sbin/pvcreate /dev/sdd
+    /usr/sbin/vgcreate eph /dev/sdc /dev/sdd
+    /usr/sbin/lvcreate -l +100%FREE -n data eph
+    /sbin/mkfs -t ext3 /dev/eph/data
+    /bin/mount -t ext3 /dev/eph/data /example/example.com
+    rename /etc/zim/volumes /etc/zim/volumes-setup
+
+You can't use this script to re-mount already created volumes.  You
+need to do that by hand.
+
+    >>> volumes.terminate()
+    >>> volumes.vgs['eph'] = ['sdc', 'sdd']
+    >>> volumes.etc_zim_volumes = (
+    ...     '/example/example.com vg/v sdc sdd\n')
+    >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
+    Traceback (most recent call last):
+    ...
+    ValueError: ('/dev/sdc', 'already in use')
 
 Symbolic links
 --------------

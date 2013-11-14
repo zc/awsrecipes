@@ -8,6 +8,12 @@ cloudformation, which is slightly less terrifying, instead.
 Changes
 =======
 
+0.4.0 2013-11-14
+----------------
+
+Added support for creating non-RAID10 LVM volumes, mainly for handling
+ephemeral disks.
+
 0.3.1 2013-11-11
 ----------------
 
