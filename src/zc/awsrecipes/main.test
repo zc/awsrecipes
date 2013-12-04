@@ -44,12 +44,12 @@ Now, we'll call setup_volumes:
     ... except Exception, v: print v
     ... # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
-    /usr/sbin/vgscan
-    /usr/sbin/pvscan
+    vgscan
+    pvscan
     /sbin/mdadm --create --metadata 1.2 -l10 -n4
        /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
-    /usr/sbin/vgcreate vg_sdb /dev/md0
-    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
+    vgcreate vg_sdb /dev/md0
+    lvcreate -l +100%FREE -n data vg_sdb
     /sbin/mkfs -t ext3 /dev/vg_sdb/data
     /bin/mkdir -p /example/example.com
     /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
@@ -71,9 +71,9 @@ volumes:
     >>> setup_volumes([])
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
-    /usr/sbin/vgscan
+    vgscan
     /sbin/vgchange -a y vg_sdb
-    /usr/sbin/pvscan
+    pvscan
     /bin/mkdir -p /example/example.com
     /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
@@ -99,21 +99,21 @@ volume.
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /sbin/mdadm -A --scan
-    /usr/sbin/vgscan
+    vgscan
     /sbin/vgchange -a y vg_sdb
-    /usr/sbin/pvscan
+    pvscan
     /sbin/mdadm --create --metadata 1.2 -l10 -n4
        /dev/md1 /dev/sdb5 /dev/sdb6 /dev/sdb7 /dev/sdb8
-    /usr/sbin/pvcreate /dev/md1
-    /usr/sbin/vgextend vg_sdb /dev/md1
-    /usr/sbin/lvextend -l +100%FREE /dev/vg_sdb/data
+    pvcreate /dev/md1
+    vgextend vg_sdb /dev/md1
+    lvextend -l +100%FREE /dev/vg_sdb/data
     /sbin/resize2fs /dev/vg_sdb/data
     /bin/mkdir -p /example/example.com
     /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
     /sbin/mdadm --create --metadata 1.2 -l10 -n4
          /dev/md2 /dev/sdc1 /dev/sdc2 /dev/sdc3 /dev/sdc4
-    /usr/sbin/vgcreate vg_sdc /dev/md2
-    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdc
+    vgcreate vg_sdc /dev/md2
+    lvcreate -l +100%FREE -n data vg_sdc
     /sbin/mkfs -t ext3 /dev/vg_sdc/data
     /bin/mkdir -p /example/other
     /bin/mount -t ext3 /dev/vg_sdc/data /example/other
@@ -163,11 +163,11 @@ You might want to knit multiple volumes together using LVM.
     ...     '/example/example.com eph/data sdc sdd\n')
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
     /bin/mkdir -p /example/example.com
-    /usr/sbin/pvscan
-    /usr/sbin/pvcreate /dev/sdc
-    /usr/sbin/pvcreate /dev/sdd
-    /usr/sbin/vgcreate eph /dev/sdc /dev/sdd
-    /usr/sbin/lvcreate -l +100%FREE -n data eph
+    pvscan
+    pvcreate /dev/sdc
+    pvcreate /dev/sdd
+    vgcreate eph /dev/sdc /dev/sdd
+    lvcreate -l +100%FREE -n data eph
     /sbin/mkfs -t ext3 /dev/eph/data
     /bin/echo /dev/mapper/eph-data /example/example.com ext3 defaults 0 1 >>
        /etc/fstab
@@ -243,12 +243,12 @@ define many:
     /bin/echo /dev/sdf3 /home/databases/cust3 ext3 defaults 0 1 >> /etc/fstab
     /bin/mount /home/databases/cust3
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
-    /usr/sbin/vgscan
-    /usr/sbin/pvscan
+    vgscan
+    pvscan
     /sbin/mdadm --create --metadata 1.2 -l10 -n4
         /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
-    /usr/sbin/vgcreate vg_sdb /dev/md0
-    /usr/sbin/lvcreate -l +100%FREE -n data vg_sdb
+    vgcreate vg_sdb /dev/md0
+    lvcreate -l +100%FREE -n data vg_sdb
     /sbin/mkfs -t ext3 /dev/vg_sdb/data
     /bin/mkdir -p /example/example.com
     /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com

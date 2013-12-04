@@ -10,6 +10,10 @@ Changes
 
 - For non-raid volumes, add entries to fstab.
 
+- lvm commands moved in Centos 6. :(
+
+  Try assuming they're in the path.  We'll verify this by staging it.
+
 0.4.0 2013-11-14
 ----------------
 

@@ -68,7 +68,7 @@ class FauxVolumes:
 
         def Popen(command, stdout=None, stderr=None, shell=False):
             assert_(shell)
-            meth = command.split()[0].rsplit('/', 1)[1].replace('.', '_')
+            meth = command.split()[0].rsplit('/', 1)[-1].replace('.', '_')
             meth = getattr(self, meth)
             return FauxPopen(meth, command, stdout, stderr)
         setupstack.context_manager(

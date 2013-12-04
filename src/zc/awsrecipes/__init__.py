@@ -59,14 +59,14 @@ class LogicalVolume:
               % (len(unused), mdnum, ' '.join('/dev/' + u for u in unused))
               )
             if self.logical:
-                s('/usr/sbin/pvcreate /dev/md%s' % mdnum)
-                s('/usr/sbin/vgextend vg_%s /dev/md%s' % (self.name, mdnum))
-                s('/usr/sbin/lvextend -l +100%%FREE /dev/vg_%s/data'
+                s('pvcreate /dev/md%s' % mdnum)
+                s('vgextend vg_%s /dev/md%s' % (self.name, mdnum))
+                s('lvextend -l +100%%FREE /dev/vg_%s/data'
                   % self.name)
                 s('/sbin/resize2fs /dev/vg_%s/data' % self.name)
             else:
-                s('/usr/sbin/vgcreate vg_%s /dev/md%s' % (self.name, mdnum))
-                s('/usr/sbin/lvcreate -l +100%%FREE -n data vg_%s' % self.name)
+                s('vgcreate vg_%s /dev/md%s' % (self.name, mdnum))
+                s('lvcreate -l +100%%FREE -n data vg_%s' % self.name)
                 s('/sbin/mkfs -t ext3 /dev/vg_%s/data' % self.name)
                 self.logical = True
         else:
@@ -96,9 +96,9 @@ def lvm(mount_point, sdvols):
     sdvols = ["/dev/"+pvol for pvol in sdvols]
     make_sure_physical_volumes_dont_exist(sdvols)
     for pvol in sdvols:
-        s("/usr/sbin/pvcreate "+pvol)
-    s("/usr/sbin/vgcreate %s %s" % (vg, " ".join(sdvols)))
-    s("/usr/sbin/lvcreate -l +100%%FREE -n %s %s" % (v, vg))
+        s("pvcreate "+pvol)
+    s("vgcreate %s %s" % (vg, " ".join(sdvols)))
+    s("lvcreate -l +100%%FREE -n %s %s" % (v, vg))
     s("/sbin/mkfs -t ext3 /dev/%s/%s" % (vg, v))
     s("/bin/echo /dev/mapper/%s-%s %s ext3 defaults 0 1 >> /etc/fstab"
       % (vg, v, mount_point))
@@ -107,7 +107,7 @@ def lvm(mount_point, sdvols):
 def make_sure_physical_volumes_dont_exist(vols):
     for v in vols:
         wait_for_device(v)
-    for line in p("/usr/sbin/pvscan"):
+    for line in p("pvscan"):
         line = line.strip()
         if not line:
             continue
@@ -218,7 +218,7 @@ def setup_volumes():
 
         # Scan for logical volumes:
         lv_pat = re.compile('Found volume group "vg_(sd\w+)"').search
-        for line in p('/usr/sbin/vgscan'):
+        for line in p('vgscan'):
             m = lv_pat(line)
             if not m:
                 continue
@@ -229,7 +229,7 @@ def setup_volumes():
         # Record the physical volums in each logical_volume so we can see
         # if any are missing:
         PV = re.compile("PV /dev/md(\w+) +VG vg_(sd\w+) ").search
-        for line in p("/usr/sbin/pvscan"):
+        for line in p("pvscan"):
             m = PV(line)
             if not m:
                 continue
