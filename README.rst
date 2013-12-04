@@ -8,6 +8,8 @@ cloudformation, which is slightly less terrifying, instead.
 Changes
 =======
 
+- For non-raid volumes, add entries to fstab.
+
 0.4.0 2013-11-14
 ----------------
 

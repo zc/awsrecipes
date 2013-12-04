@@ -149,7 +149,8 @@ indcates that we don't want RAID10.
     /bin/mount -t ext3 /dev/sdb1 /example/example.com
     AssertionError: no file system
     /sbin/mkfs.ext3 -F /dev/sdb1
-    /bin/mount -t ext3 /dev/sdb1 /example/example.com
+    /bin/echo /dev/sdb1 /example/example.com ext3 defaults 0 1 >> /etc/fstab
+    /bin/mount /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 LVM
@@ -168,7 +169,9 @@ You might want to knit multiple volumes together using LVM.
     /usr/sbin/vgcreate eph /dev/sdc /dev/sdd
     /usr/sbin/lvcreate -l +100%FREE -n data eph
     /sbin/mkfs -t ext3 /dev/eph/data
-    /bin/mount -t ext3 /dev/eph/data /example/example.com
+    /bin/echo /dev/mapper/eph-data /example/example.com ext3 defaults 0 1 >>
+       /etc/fstab
+    /bin/mount /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 You can't use this script to re-mount already created volumes.  You
@@ -229,14 +232,16 @@ define many:
     /bin/mount -t ext3 /dev/sdf1 /home/databases/cust1
     AssertionError: no file system
     /sbin/mkfs.ext3 -F /dev/sdf1
-    /bin/mount -t ext3 /dev/sdf1 /home/databases/cust1
+    /bin/echo /dev/sdf1 /home/databases/cust1 ext3 defaults 0 1 >> /etc/fstab
+    /bin/mount /home/databases/cust1
     /bin/mkdir -p /mnt/ephemeral0/cust2
     /bin/ln -s /mnt/ephemeral0/cust2 /home/databases/cust2
     /bin/mkdir -p /home/databases/cust3
     /bin/mount -t ext3 /dev/sdf3 /home/databases/cust3
     AssertionError: no file system
     /sbin/mkfs.ext3 -F /dev/sdf3
-    /bin/mount -t ext3 /dev/sdf3 /home/databases/cust3
+    /bin/echo /dev/sdf3 /home/databases/cust3 ext3 defaults 0 1 >> /etc/fstab
+    /bin/mount /home/databases/cust3
     /sbin/mdadm --examine --scan >>/etc/mdadm.conf
     /usr/sbin/vgscan
     /usr/sbin/pvscan

@@ -83,7 +83,9 @@ def single(mount_point, device):
     if not s("/bin/mount -t ext3 %s %s" % (device, mount_point),
              should_raise=False):
         s("/sbin/mkfs.ext3 -F "+device)
-        s("/bin/mount -t ext3 %s %s" % (device, mount_point))
+        s("/bin/echo %s %s ext3 defaults 0 1 >> /etc/fstab"
+          % (device, mount_point))
+        s("/bin/mount %s" % mount_point)
 
 lvname = re.compile(r"\w+/\w+$").match
 def lvm(mount_point, sdvols):
@@ -98,7 +100,9 @@ def lvm(mount_point, sdvols):
     s("/usr/sbin/vgcreate %s %s" % (vg, " ".join(sdvols)))
     s("/usr/sbin/lvcreate -l +100%%FREE -n %s %s" % (v, vg))
     s("/sbin/mkfs -t ext3 /dev/%s/%s" % (vg, v))
-    s("/bin/mount -t ext3 /dev/%s/%s %s" % (vg, v, mount_point))
+    s("/bin/echo /dev/mapper/%s-%s %s ext3 defaults 0 1 >> /etc/fstab"
+      % (vg, v, mount_point))
+    s("/bin/mount %s" % mount_point)
 
 def make_sure_physical_volumes_dont_exist(vols):
     for v in vols:
