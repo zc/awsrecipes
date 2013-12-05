@@ -43,16 +43,16 @@ Now, we'll call setup_volumes:
     >>> try: setup_volumes([])
     ... except Exception, v: print v
     ... # doctest: +NORMALIZE_WHITESPACE
-    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    mdadm --examine --scan >>/etc/mdadm.conf
     vgscan
     pvscan
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+    mdadm --create --metadata 1.2 -l10 -n4
        /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
     vgcreate vg_sdb /dev/md0
     lvcreate -l +100%FREE -n data vg_sdb
-    /sbin/mkfs -t ext3 /dev/vg_sdb/data
-    /bin/mkdir -p /example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    mkfs -t ext3 /dev/vg_sdb/data
+    mkdir -p /example/example.com
+    mount -t ext3 /dev/vg_sdb/data /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 And if we look at the state of the setup machine, it's what we expect:
@@ -69,13 +69,13 @@ volumes:
 
     >>> volumes.terminate()
     >>> setup_volumes([])
-    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
-    /sbin/mdadm -A --scan
+    mdadm --examine --scan >>/etc/mdadm.conf
+    mdadm -A --scan
     vgscan
-    /sbin/vgchange -a y vg_sdb
+    vgchange -a y vg_sdb
     pvscan
-    /bin/mkdir -p /example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    mkdir -p /example/example.com
+    mount -t ext3 /dev/vg_sdb/data /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
     >>> volumes.status()
@@ -97,26 +97,26 @@ volume.
     ...     ['sdb5', 'sdb6', 'sdb7', 'sdb8', 'sdc1', 'sdc2', 'sdc3', 'sdc4'])
 
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
-    /sbin/mdadm -A --scan
+    mdadm --examine --scan >>/etc/mdadm.conf
+    mdadm -A --scan
     vgscan
-    /sbin/vgchange -a y vg_sdb
+    vgchange -a y vg_sdb
     pvscan
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+    mdadm --create --metadata 1.2 -l10 -n4
        /dev/md1 /dev/sdb5 /dev/sdb6 /dev/sdb7 /dev/sdb8
     pvcreate /dev/md1
     vgextend vg_sdb /dev/md1
     lvextend -l +100%FREE /dev/vg_sdb/data
-    /sbin/resize2fs /dev/vg_sdb/data
-    /bin/mkdir -p /example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+    resize2fs /dev/vg_sdb/data
+    mkdir -p /example/example.com
+    mount -t ext3 /dev/vg_sdb/data /example/example.com
+    mdadm --create --metadata 1.2 -l10 -n4
          /dev/md2 /dev/sdc1 /dev/sdc2 /dev/sdc3 /dev/sdc4
     vgcreate vg_sdc /dev/md2
     lvcreate -l +100%FREE -n data vg_sdc
-    /sbin/mkfs -t ext3 /dev/vg_sdc/data
-    /bin/mkdir -p /example/other
-    /bin/mount -t ext3 /dev/vg_sdc/data /example/other
+    mkfs -t ext3 /dev/vg_sdc/data
+    mkdir -p /example/other
+    mount -t ext3 /dev/vg_sdc/data /example/other
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
     >>> volumes.status()
@@ -145,12 +145,12 @@ Here, we have a single volume in the volume configuration.  This
 indcates that we don't want RAID10.
 
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /bin/mkdir -p /example/example.com
-    /bin/mount -t ext3 /dev/sdb1 /example/example.com
+    mkdir -p /example/example.com
+    mount -t ext3 /dev/sdb1 /example/example.com
     AssertionError: no file system
-    /sbin/mkfs.ext3 -F /dev/sdb1
-    /bin/echo /dev/sdb1 /example/example.com ext3 defaults 0 1 >> /etc/fstab
-    /bin/mount /example/example.com
+    mkfs.ext3 -F /dev/sdb1
+    echo /dev/sdb1 /example/example.com ext3 defaults 0 1 >> /etc/fstab
+    mount /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 LVM
@@ -162,16 +162,16 @@ You might want to knit multiple volumes together using LVM.
     >>> volumes.etc_zim_volumes = (
     ...     '/example/example.com eph/data sdc sdd\n')
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /bin/mkdir -p /example/example.com
+    mkdir -p /example/example.com
     pvscan
     pvcreate /dev/sdc
     pvcreate /dev/sdd
     vgcreate eph /dev/sdc /dev/sdd
     lvcreate -l +100%FREE -n data eph
-    /sbin/mkfs -t ext3 /dev/eph/data
-    /bin/echo /dev/mapper/eph-data /example/example.com ext3 defaults 0 1 >>
+    mkfs -t ext3 /dev/eph/data
+    echo /dev/mapper/eph-data /example/example.com ext3 defaults 0 1 >>
        /etc/fstab
-    /bin/mount /example/example.com
+    mount /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 You can't use this script to re-mount already created volumes.  You
@@ -197,8 +197,8 @@ be created before databases are installed:
     >>> volumes.init()
     >>> volumes.etc_zim_volumes = '/home/database /mnt/ephemeral0/databases\n'
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /bin/mkdir -p /mnt/ephemeral0/databases
-    /bin/ln -s /mnt/ephemeral0/databases /home/database
+    mkdir -p /mnt/ephemeral0/databases
+    ln -s /mnt/ephemeral0/databases /home/database
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 Here, we had ro create the create the source directory.  The target
@@ -209,9 +209,9 @@ will also be created, if necessary:
     >>> volumes.etc_zim_volumes = \
     ...     '/home/database/cust /mnt/ephemeral0/cust\n'
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /bin/mkdir -p /home/database
-    /bin/mkdir -p /mnt/ephemeral0/cust
-    /bin/ln -s /mnt/ephemeral0/cust /home/database/cust
+    mkdir -p /home/database
+    mkdir -p /mnt/ephemeral0/cust
+    ln -s /mnt/ephemeral0/cust /home/database/cust
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 Putting many things together
@@ -228,30 +228,30 @@ define many:
     ... /home/databases/cust3 sdf3
     ... '''
     >>> setup_volumes([]) # doctest: +NORMALIZE_WHITESPACE
-    /bin/mkdir -p /home/databases/cust1
-    /bin/mount -t ext3 /dev/sdf1 /home/databases/cust1
+    mkdir -p /home/databases/cust1
+    mount -t ext3 /dev/sdf1 /home/databases/cust1
     AssertionError: no file system
-    /sbin/mkfs.ext3 -F /dev/sdf1
-    /bin/echo /dev/sdf1 /home/databases/cust1 ext3 defaults 0 1 >> /etc/fstab
-    /bin/mount /home/databases/cust1
-    /bin/mkdir -p /mnt/ephemeral0/cust2
-    /bin/ln -s /mnt/ephemeral0/cust2 /home/databases/cust2
-    /bin/mkdir -p /home/databases/cust3
-    /bin/mount -t ext3 /dev/sdf3 /home/databases/cust3
+    mkfs.ext3 -F /dev/sdf1
+    echo /dev/sdf1 /home/databases/cust1 ext3 defaults 0 1 >> /etc/fstab
+    mount /home/databases/cust1
+    mkdir -p /mnt/ephemeral0/cust2
+    ln -s /mnt/ephemeral0/cust2 /home/databases/cust2
+    mkdir -p /home/databases/cust3
+    mount -t ext3 /dev/sdf3 /home/databases/cust3
     AssertionError: no file system
-    /sbin/mkfs.ext3 -F /dev/sdf3
-    /bin/echo /dev/sdf3 /home/databases/cust3 ext3 defaults 0 1 >> /etc/fstab
-    /bin/mount /home/databases/cust3
-    /sbin/mdadm --examine --scan >>/etc/mdadm.conf
+    mkfs.ext3 -F /dev/sdf3
+    echo /dev/sdf3 /home/databases/cust3 ext3 defaults 0 1 >> /etc/fstab
+    mount /home/databases/cust3
+    mdadm --examine --scan >>/etc/mdadm.conf
     vgscan
     pvscan
-    /sbin/mdadm --create --metadata 1.2 -l10 -n4
+    mdadm --create --metadata 1.2 -l10 -n4
         /dev/md0 /dev/sdb1 /dev/sdb2 /dev/sdb3 /dev/sdb4
     vgcreate vg_sdb /dev/md0
     lvcreate -l +100%FREE -n data vg_sdb
-    /sbin/mkfs -t ext3 /dev/vg_sdb/data
-    /bin/mkdir -p /example/example.com
-    /bin/mount -t ext3 /dev/vg_sdb/data /example/example.com
+    mkfs -t ext3 /dev/vg_sdb/data
+    mkdir -p /example/example.com
+    mount -t ext3 /dev/vg_sdb/data /example/example.com
     rename /etc/zim/volumes /etc/zim/volumes-setup
 
 

@@ -18,6 +18,7 @@ import manuel.capture
 import manuel.doctest
 import manuel.testing
 import mock
+import os
 import pprint
 import StringIO
 import subprocess
@@ -33,6 +34,8 @@ def assert_(cond, mess='assertion failed'):
     if not cond:
         raise AssertionError(mess)
 
+os_path = set(('/usr/sbin', '/bin', '/sbin'))
+
 class FauxPopen:
 
     def __init__(self, handler, command, stdout, stderr):
@@ -44,6 +47,7 @@ class FauxPopen:
             stderr = sys.stdout
         self.stdout = stdout
         self.stderr = stderr
+        assert_(not (os_path - set(os.environ['PATH'].split(':'))), "path")
         try:
             self.returncode = handler(command, self) or 0
         except AssertionError, e:
@@ -315,6 +319,8 @@ class FauxVolumes:
                 % vg)
 
 def setup(test):
+
+    os.environ['PATH'] = '/bin'
 
     setupstack.context_manager(
         test, mock.patch(
