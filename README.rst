@@ -8,6 +8,9 @@ cloudformation, which is slightly less terrifying, instead.
 Changes
 =======
 
+0.5.0 2013-12-09
+----------------
+
 - For non-raid volumes, add entries to fstab.
 
 - lvm commands moved in Centos 6. :(
