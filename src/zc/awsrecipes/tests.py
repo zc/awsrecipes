@@ -18,6 +18,7 @@ import manuel.capture
 import manuel.doctest
 import manuel.testing
 import mock
+import os
 import pprint
 import StringIO
 import subprocess
@@ -33,6 +34,8 @@ def assert_(cond, mess='assertion failed'):
     if not cond:
         raise AssertionError(mess)
 
+os_path = set(('/usr/sbin', '/bin', '/sbin'))
+
 class FauxPopen:
 
     def __init__(self, handler, command, stdout, stderr):
@@ -44,6 +47,7 @@ class FauxPopen:
             stderr = sys.stdout
         self.stdout = stdout
         self.stderr = stderr
+        assert_(not (os_path - set(os.environ['PATH'].split(':'))), "path")
         try:
             self.returncode = handler(command, self) or 0
         except AssertionError, e:
@@ -68,7 +72,7 @@ class FauxVolumes:
 
         def Popen(command, stdout=None, stderr=None, shell=False):
             assert_(shell)
-            meth = command.split()[0].rsplit('/', 1)[1].replace('.', '_')
+            meth = command.split()[0].rsplit('/', 1)[-1].replace('.', '_')
             meth = getattr(self, meth)
             return FauxPopen(meth, command, stdout, stderr)
         setupstack.context_manager(
@@ -87,6 +91,7 @@ class FauxVolumes:
         self.preexisting_mds = preexisting_mds or {}
         self.preexisting_vgs = preexisting_vgs or {}
         self.dirs = set()
+        self.fstab = {}
 
     def terminate(self):
         self.init(self.sds, self.mds, self.vgs)
@@ -98,9 +103,29 @@ class FauxVolumes:
         if name.startswith('/dev/'):
             name = name[5:]
             return name in self.sds or name in self.mds
-        if [d for d in self.dirs if d.startswith(name+'/')]:
+        if [d for d in self.dirs if d.startswith(name+'/') or d == name]:
             return True
         return exists_original(name)
+
+    def echo(self, command, p):
+        assert_(command.endswith('>> /etc/fstab'))
+        command = command.split()[1:-2]
+        assert_(command[-4:] == ['ext3', 'defaults', '0', '1'])
+        dev, mp = command[:-4]
+        assert_(mp not in self.fstab)
+        assert_(not [v for v in self.fstab.values() if v == dev])
+        assert_(self.exists(mp))
+        mapper = '/dev/mapper/'
+        if dev.startswith(mapper):
+            vg, v = dev[len(mapper):].split('-')
+            assert_(vg in self.vgs, "bad vg")
+            assert_(v == 'data')
+            assert_(vg in self.lvs)
+        else:
+            assert_(dev.startswith('/dev/'))
+            assert_(dev[5:] in self.fss)
+
+        self.fstab[mp] = dev
 
     def open(self, name):
         if name == '/etc/mdadm.conf':
@@ -202,6 +227,10 @@ class FauxVolumes:
 
     def mount(self, command, p):
         args = command.split()
+        if len(args) == 2:
+            assert(args[1] in self.fstab)
+            return
+
         assert_(args[1:3] == '-t ext3'.split())
         [lv, mp] = args[3:]
         assert_(lv.startswith('/dev/'))
@@ -290,6 +319,8 @@ class FauxVolumes:
                 % vg)
 
 def setup(test):
+
+    os.environ['PATH'] = '/bin'
 
     setupstack.context_manager(
         test, mock.patch(

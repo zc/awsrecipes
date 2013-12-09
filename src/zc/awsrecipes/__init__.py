@@ -5,6 +5,10 @@ import sys
 import tempfile
 import time
 
+
+path_needed = set(('/usr/sbin', '/bin', '/sbin'))
+
+
 def s(command, should_raise=True):
     print command
     if subprocess.call(command, shell=True):
@@ -43,7 +47,7 @@ class LogicalVolume:
 
     def has_logical_volume(self):
         self.logical = True
-        s('/sbin/vgchange -a y vg_'+self.name)
+        s('vgchange -a y vg_'+self.name)
 
     def setup(self):
         assert self.pvs == self.mds, (
@@ -55,55 +59,59 @@ class LogicalVolume:
             mdnum = 0
             while os.path.exists('/dev/md%s' % mdnum):
                 mdnum += 1
-            s('/sbin/mdadm --create --metadata 1.2 -l10 -n%s /dev/md%s %s'
+            s('mdadm --create --metadata 1.2 -l10 -n%s /dev/md%s %s'
               % (len(unused), mdnum, ' '.join('/dev/' + u for u in unused))
               )
             if self.logical:
-                s('/usr/sbin/pvcreate /dev/md%s' % mdnum)
-                s('/usr/sbin/vgextend vg_%s /dev/md%s' % (self.name, mdnum))
-                s('/usr/sbin/lvextend -l +100%%FREE /dev/vg_%s/data'
+                s('pvcreate /dev/md%s' % mdnum)
+                s('vgextend vg_%s /dev/md%s' % (self.name, mdnum))
+                s('lvextend -l +100%%FREE /dev/vg_%s/data'
                   % self.name)
-                s('/sbin/resize2fs /dev/vg_%s/data' % self.name)
+                s('resize2fs /dev/vg_%s/data' % self.name)
             else:
-                s('/usr/sbin/vgcreate vg_%s /dev/md%s' % (self.name, mdnum))
-                s('/usr/sbin/lvcreate -l +100%%FREE -n data vg_%s' % self.name)
-                s('/sbin/mkfs -t ext3 /dev/vg_%s/data' % self.name)
+                s('vgcreate vg_%s /dev/md%s' % (self.name, mdnum))
+                s('lvcreate -l +100%%FREE -n data vg_%s' % self.name)
+                s('mkfs -t ext3 /dev/vg_%s/data' % self.name)
                 self.logical = True
         else:
             assert self.logical
 
         path = self.path
-        s('/bin/mkdir -p %s' % path)
-        s('/bin/mount -t ext3 /dev/vg_%s/data %s' % (self.name, path))
+        s('mkdir -p %s' % path)
+        s('mount -t ext3 /dev/vg_%s/data %s' % (self.name, path))
 
 def single(mount_point, device):
     if not os.path.exists(mount_point):
-        s('/bin/mkdir -p %s' % mount_point)
+        s('mkdir -p %s' % mount_point)
     wait_for_device(device)
-    if not s("/bin/mount -t ext3 %s %s" % (device, mount_point),
+    if not s("mount -t ext3 %s %s" % (device, mount_point),
              should_raise=False):
-        s("/sbin/mkfs.ext3 -F "+device)
-        s("/bin/mount -t ext3 %s %s" % (device, mount_point))
+        s("mkfs.ext3 -F "+device)
+        s("echo %s %s ext3 defaults 0 1 >> /etc/fstab"
+          % (device, mount_point))
+        s("mount %s" % mount_point)
 
 lvname = re.compile(r"\w+/\w+$").match
 def lvm(mount_point, sdvols):
     # Make a non-raid logical volume
     if not os.path.exists(mount_point):
-        s('/bin/mkdir -p %s' % mount_point)
+        s('mkdir -p %s' % mount_point)
     vg, v = sdvols.pop(0).split('/')
     sdvols = ["/dev/"+pvol for pvol in sdvols]
     make_sure_physical_volumes_dont_exist(sdvols)
     for pvol in sdvols:
-        s("/usr/sbin/pvcreate "+pvol)
-    s("/usr/sbin/vgcreate %s %s" % (vg, " ".join(sdvols)))
-    s("/usr/sbin/lvcreate -l +100%%FREE -n %s %s" % (v, vg))
-    s("/sbin/mkfs -t ext3 /dev/%s/%s" % (vg, v))
-    s("/bin/mount -t ext3 /dev/%s/%s %s" % (vg, v, mount_point))
+        s("pvcreate "+pvol)
+    s("vgcreate %s %s" % (vg, " ".join(sdvols)))
+    s("lvcreate -l +100%%FREE -n %s %s" % (v, vg))
+    s("mkfs -t ext3 /dev/%s/%s" % (vg, v))
+    s("echo /dev/mapper/%s-%s %s ext3 defaults 0 1 >> /etc/fstab"
+      % (vg, v, mount_point))
+    s("mount %s" % mount_point)
 
 def make_sure_physical_volumes_dont_exist(vols):
     for v in vols:
         wait_for_device(v)
-    for line in p("/usr/sbin/pvscan"):
+    for line in p("pvscan"):
         line = line.strip()
         if not line:
             continue
@@ -114,18 +122,24 @@ def make_sure_physical_volumes_dont_exist(vols):
 
 def ln(mount_point, src):
     if not os.path.exists(os.path.dirname(mount_point)):
-        s('/bin/mkdir -p %s' % os.path.dirname(mount_point))
+        s('mkdir -p %s' % os.path.dirname(mount_point))
     if not os.path.exists(src):
-        s('/bin/mkdir -p %s' % src)
-    s("/bin/ln -s %s %s" % (src, mount_point))
+        s('mkdir -p %s' % src)
+    s("ln -s %s %s" % (src, mount_point))
 
 def wait_for_device(path):
     while not os.path.exists(path):
         time.sleep(1)
 
+def fix_path():
+    for p in (path_needed - set(os.environ['PATH'].split(':'))):
+        os.environ['PATH'] += ':'+p
+
 def setup_volumes():
     """Set up md (raid) and lvm modules on a new machine
     """
+
+    fix_path()
 
     # Get what we want from the ZK tree
     logical_volumes = {}
@@ -170,10 +184,10 @@ def setup_volumes():
 
         # The volumes may have been set up before on a previous machine.
         # Scan for them:
-        s('/sbin/mdadm --examine --scan >>/etc/mdadm.conf')
+        s('mdadm --examine --scan >>/etc/mdadm.conf')
         f = open('/etc/mdadm.conf')
         if f.read().strip():
-            s('/sbin/mdadm -A --scan')
+            s('mdadm -A --scan')
         f.close()
 
         # Read /proc/mdstat to find out about existing raid volumes:
@@ -214,7 +228,7 @@ def setup_volumes():
 
         # Scan for logical volumes:
         lv_pat = re.compile('Found volume group "vg_(sd\w+)"').search
-        for line in p('/usr/sbin/vgscan'):
+        for line in p('vgscan'):
             m = lv_pat(line)
             if not m:
                 continue
@@ -225,7 +239,7 @@ def setup_volumes():
         # Record the physical volums in each logical_volume so we can see
         # if any are missing:
         PV = re.compile("PV /dev/md(\w+) +VG vg_(sd\w+) ").search
-        for line in p("/usr/sbin/pvscan"):
+        for line in p("pvscan"):
             m = PV(line)
             if not m:
                 continue
